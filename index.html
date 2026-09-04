@@ -65,6 +65,16 @@
     color: #fff;
     border-color: #fff;
   }
+  /* Çoklu aktif kart düzeni */
+  .active-jobs-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .active-card {
+    margin-bottom: 0;
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -113,18 +123,11 @@
     <!-- ANA PANEL -->
     <section id="screenDashboard" class="screen" hidden>
 
-      <div id="activeJobCard" class="active-card" hidden>
-        <div class="active-tag"><span class="pulse-dot"></span>Devam Eden İş</div>
-        <div class="active-title" id="activeJobType"></div>
-        <div class="active-meta">
-          <span id="activeStation"></span>
-          <span>Başlangıç <span id="activeStart"></span></span>
-        </div>
-        <div class="timer" id="activeTimer">00:00:00</div>
-        <button class="btn-danger btn-block" id="endJobBtn">İŞİ BİTİR</button>
-      </div>
+      <!-- ÇOKLU AKTİF İŞLER LİSTESİ -->
+      <div id="activeJobsList" class="active-jobs-container"></div>
 
-      <button class="btn-start" id="startJobBtn" hidden>YENİ İŞ BAŞLAT</button>
+      <!-- İŞ BAŞLAT BUTONU (HER ZAMAN GÖRÜNÜR) -->
+      <button class="btn-start" id="startJobBtn">YENİ İŞ BAŞLAT</button>
 
       <div id="historyBlock" hidden>
         <div class="section-label">Son Tamamlanan İşlerim</div>

@@ -26,7 +26,8 @@ let state = {
   jobTypes: [],
   stations: [],
   logs: [],
-  activeLog: null,
+  activeLogs: [], // Çoklu aktif iş listesi
+  endingLog: null, // O an bitirilmek istenen spesifik iş
   selJobType: null,
   selStation: null,
 };
@@ -174,26 +175,35 @@ function refreshDashboard() {
   if (!state.worker) return;
   const wid = state.worker.id;
 
-  // Aktif işi bul
-  state.activeLog = state.logs.find((l) => l.worker_id === wid && l.status === "active") || null;
+  // Seçili işçiye ait TÜM aktif işleri getir
+  state.activeLogs = state.logs.filter((l) => l.worker_id === wid && l.status === "active");
   renderDashboard();
 }
 
 function renderDashboard() {
-  const activeCard = el("activeJobCard");
-  const startBtn = el("startJobBtn");
+  const container = el("activeJobsList");
+  container.innerHTML = "";
 
-  if (state.activeLog) {
-    activeCard.hidden = false;
-    startBtn.hidden = true;
-    el("activeJobType").textContent = state.activeLog.job_type;
-    el("activeStation").textContent = state.activeLog.station;
-    el("activeStart").textContent = fmtTime(state.activeLog.start_time);
-  } else {
-    activeCard.hidden = true;
-    startBtn.hidden = false;
-  }
+  // Aktif iş kartlarını oluştur
+  state.activeLogs.forEach((log) => {
+    const card = document.createElement("div");
+    card.className = "active-card";
+    card.innerHTML = `
+      <div class="active-tag"><span class="pulse-dot"></span>Devam Eden İş</div>
+      <div class="active-title">${log.job_type}</div>
+      <div class="active-meta">
+        <span>${log.station}</span>
+        <span>Başlangıç ${fmtTime(log.start_time)}</span>
+      </div>
+      <div class="timer" id="timer-${log.id}">00:00:00</div>
+      <button class="btn-danger btn-block" style="margin-top:12px;">İŞİ BİTİR</button>
+    `;
 
+    card.querySelector("button").onclick = () => openEndFlow(log);
+    container.appendChild(card);
+  });
+
+  // Geçmiş listesi
   const wid = state.worker.id;
   const historyList = el("historyList");
   const historyBlock = el("historyBlock");
@@ -225,7 +235,7 @@ function renderDashboard() {
   }
 }
 
-// ---------------- Excel Dışa Aktarma (İstemci Tabanlı) ----------------
+// ---------------- Excel Dışa Aktarma ----------------
 
 el("exportBtn").onclick = () => {
   if (state.logs.length === 0) {
@@ -264,10 +274,10 @@ el("exportBtn").onclick = () => {
   XLSX.utils.book_append_sheet(wb, ws, "İş Kayıtları");
 
   const dateStr = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `is-kayitlari_${dateStr}.xlsx`);
+  XLSX.writeFile(wb, `kambeton_is_kayitlari_${dateStr}.xlsx`);
 };
 
-// ---------------- Dinamik İş Türü ve İstasyon Akışı ----------------
+// ---------------- Start Flow ----------------
 
 el("startJobBtn").onclick = () => {
   state.selJobType = null;
@@ -279,7 +289,6 @@ el("startJobBtn").onclick = () => {
 el("startBack").onclick = () => showScreen("screenDashboard");
 
 function renderStartFlow() {
-  // İş Türleri
   const jtGrid = el("jobTypeGrid");
   jtGrid.innerHTML = "";
   state.jobTypes.forEach((jt) => {
@@ -330,7 +339,6 @@ function renderStartFlow() {
   };
   jtGrid.appendChild(addJtBtn);
 
-  // İstasyonlar
   const stGrid = el("stationGrid");
   stGrid.innerHTML = "";
   state.stations.forEach((st) => {
@@ -409,26 +417,33 @@ el("confirmStartBtn").onclick = () => {
   refreshDashboard();
 };
 
-// ---------------- İş Bitir Akışı ----------------
+// ---------------- End Flow ----------------
 
-el("endJobBtn").onclick = () => {
-  if (!state.activeLog) return;
-  el("endJobType").textContent = state.activeLog.job_type;
-  el("endMeta").textContent = `${state.activeLog.station} \u00b7 Başlangıç ${fmtTime(state.activeLog.start_time)}`;
+function openEndFlow(log) {
+  state.endingLog = log;
+  el("endJobType").textContent = log.job_type;
+  el("endMeta").textContent = `${log.station} \u00b7 Başlangıç ${fmtTime(log.start_time)}`;
   el("endNote").value = "";
   showScreen("screenEnd");
+}
+
+el("endBack").onclick = () => {
+  state.endingLog = null;
+  showScreen("screenDashboard");
 };
-el("endBack").onclick = () => showScreen("screenDashboard");
 
 el("confirmEndBtn").onclick = () => {
-  if (!state.activeLog) return;
-  state.activeLog.end_time = new Date().toISOString();
-  state.activeLog.end_note = el("endNote").value.trim();
-  state.activeLog.status = "done";
+  if (!state.endingLog) return;
+  
+  const target = state.logs.find((l) => l.id === state.endingLog.id);
+  if (target) {
+    target.end_time = new Date().toISOString();
+    target.end_note = el("endNote").value.trim();
+    target.status = "done";
+    saveLS(LS.logs, state.logs);
+  }
 
-  saveLS(LS.logs, state.logs);
-  state.activeLog = null;
-
+  state.endingLog = null;
   showScreen("screenDashboard");
   refreshDashboard();
 };
@@ -439,11 +454,20 @@ function tick() {
   const now = new Date();
   el("clock").textContent = now.toLocaleTimeString("tr-TR");
   if (state.worker) el("shiftLabel").textContent = getShiftLabel(now);
-  if (state.activeLog && !el("screenDashboard").hidden) {
-    el("activeTimer").textContent = fmtDuration(now - new Date(state.activeLog.start_time));
+
+  // Ana paneldeki tüm aktif kartların sayaçlarını canlı güncelle
+  if (!el("screenDashboard").hidden && state.activeLogs.length > 0) {
+    state.activeLogs.forEach((log) => {
+      const timerDom = document.getElementById(`timer-${log.id}`);
+      if (timerDom) {
+        timerDom.textContent = fmtDuration(now - new Date(log.start_time));
+      }
+    });
   }
-  if (state.activeLog && !el("screenEnd").hidden) {
-    el("endTimer").textContent = fmtDuration(now - new Date(state.activeLog.start_time));
+
+  // Bitir ekranı açıksa onun sayacını güncelle
+  if (state.endingLog && !el("screenEnd").hidden) {
+    el("endTimer").textContent = fmtDuration(now - new Date(state.endingLog.start_time));
   }
 }
 setInterval(tick, 1000);
@@ -465,6 +489,6 @@ init();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
+    navigator.serviceWorker.register("sw.js").catch(() => {});
   });
 }
