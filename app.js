@@ -156,6 +156,7 @@ function selectWorker(w) {
 function refreshDashboard() {
   if (!state.worker) return;
   const wid = state.worker.id;
+  // Sadece BU KULLANICIYA ait devam eden işler
   state.activeLogs = state.logs.filter((l) => l.worker_id === wid && l.status === "active");
   renderDashboard();
 }
@@ -186,15 +187,16 @@ function renderDashboard() {
   const wid = state.worker.id;
   const historyList = el("historyList");
   const historyBlock = el("historyBlock");
-  const userHistory = state.logs
+
+  // SADECE BU KULLANICININ TAMAMLADIĞI İŞLER
+  const myHistory = state.logs
     .filter((l) => l.worker_id === wid && l.status === "done")
-    .slice(-10)
     .reverse();
 
-  if (userHistory.length > 0) {
+  if (myHistory.length > 0) {
     historyBlock.hidden = false;
     historyList.innerHTML = "";
-    userHistory.forEach((l) => {
+    myHistory.forEach((l) => {
       const durMin = Math.round((new Date(l.end_time) - new Date(l.start_time)) / 60000);
       const adamSaat = ((durMin * (l.worker_count || 1)) / 60).toFixed(2);
       
@@ -242,25 +244,39 @@ function closeEditModal() {
 }
 
 function deleteHistoryLog(id) {
-  if (!confirm("Bu işlem kaydını listeden ve etüt tablosundan silmek istediğinize emin misiniz?")) return;
-  state.logs = state.logs.filter(l => l.id !== id);
+  if (!confirm("Bu işlem kaydını silmek istediğinize emin misiniz?")) return;
+  state.logs = state.logs.filter((l) => l.id !== id);
   saveLS(LS.logs, state.logs);
   refreshDashboard();
 }
 
-// ---------------- Excel Çıktısı (Kambeton Formatı) ----------------
+// ---------------- SADECE BU KULLANICIYA ÖZEL EXCEL ÇIKTISI ----------------
 
 function exportExcel() {
-  if (state.logs.length === 0) {
-    alert("Dışa aktarılacak kayıt bulunmuyor.");
+  if (!state.worker) {
+    alert("Lütfen bir kullanıcı seçin.");
     return;
   }
 
-  const baseTime = new Date(state.logs[0].start_time).getTime();
+  const wid = state.worker.id;
+
+  // 1. KURAL: Kesinlikle ve sadece BU kişinin tamamlanmış kayıtlarını al
+  const myLogs = state.logs
+    .filter((l) => l.worker_id === wid && l.status === "done")
+    .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+
+  if (myLogs.length === 0) {
+    alert(`${state.worker.name} adına ait tamamlanmış işlem bulunmuyor.`);
+    return;
+  }
+
+  // 2. KURAL: 0. dakika bu kişinin İLK işleminin başlama anıdır
+  const baseTime = new Date(myLogs[0].start_time).getTime();
 
   const wsData = [
-    ["KÖPRÜ KİRİŞİ ETÜDÜ - ZAMAN ETÜDÜ FORMU"],
-    ["Tarih:", new Date().toLocaleDateString("tr-TR"), "", "Tesis / Firma:", "KAMBETON A.Ş."],
+    ["KAMBETON A.Ş. - ZAMAN ETÜDÜ FORMU"],
+    ["Etüt Sorumlusu:", `${state.worker.name} (Sicil: ${state.worker.id})`, "", "Tarih:", new Date().toLocaleDateString("tr-TR")],
+    ["Vardiya:", "07:45 - 17:45", "", "Tesis / Firma:", "KAMBETON A.Ş."],
     [],
     [
       "İŞLEM NO",
@@ -272,7 +288,8 @@ function exportExcel() {
       "BİTİŞ",
       "SÜRE (dk)",
       "KİŞİ",
-      "ADAM SAAT"
+      "ADAM SAAT",
+      "DURUŞ / GECİKME NEDENİ"
     ]
   ];
 
@@ -282,42 +299,36 @@ function exportExcel() {
   let sumHazirlik = 0;
   let sumAdamSaat = 0;
 
-  state.logs.forEach((log, index) => {
+  myLogs.forEach((log, index) => {
     const startMs = new Date(log.start_time).getTime();
+    const endMs = new Date(log.end_time).getTime();
+
+    // Bu kişinin ilk işine göre kümülatif dakika
     const baslamaDakika = Math.max(0, Math.round((startMs - baseTime) / 60000));
+    const bitisDakika = Math.max(0, Math.round((endMs - baseTime) / 60000));
+    const durationMin = Math.max(0, Math.round((endMs - startMs) / 60000));
+    const adamSaat = Number(((durationMin * (log.worker_count || 1)) / 60).toFixed(2));
 
-    let bitisSaatStr = "-";
-    let bitisDakikaStr = "-";
-    let durationMin = 0;
-    let adamSaat = 0;
+    const act = (log.activity || "İŞLEM").toUpperCase();
+    if (act === "İŞLEM") sumIslem += durationMin;
+    else if (act === "TAŞIMA") sumTasima += durationMin;
+    else if (act === "BEKLEME") sumBekleme += durationMin;
+    else if (act === "HAZIRLIK") sumHazirlik += durationMin;
 
-    if (log.end_time) {
-      const endMs = new Date(log.end_time).getTime();
-      bitisSaatStr = fmtTime(log.end_time);
-      bitisDakikaStr = Math.max(0, Math.round((endMs - baseTime) / 60000));
-      durationMin = Math.max(0, Math.round((endMs - startMs) / 60000));
-      adamSaat = Number(((durationMin * (log.worker_count || 1)) / 60).toFixed(2));
-
-      const act = (log.activity || "İŞLEM").toUpperCase();
-      if (act === "İŞLEM") sumIslem += durationMin;
-      else if (act === "TAŞIMA") sumTasima += durationMin;
-      else if (act === "BEKLEME") sumBekleme += durationMin;
-      else if (act === "HAZIRLIK") sumHazirlik += durationMin;
-
-      sumAdamSaat += adamSaat;
-    }
+    sumAdamSaat += adamSaat;
 
     wsData.push([
-      index + 1,
+      index + 1, // KESİNLİKLE 1'DEN BAŞLAR
       log.job_type,
       log.activity || "İŞLEM",
       fmtTime(log.start_time),
-      baslamaDakika,
-      bitisSaatStr,
-      bitisDakikaStr,
-      durationMin || "",
+      baslamaDakika, // KESİNLİKLE 0'DAN BAŞLAR
+      fmtTime(log.end_time),
+      bitisDakika,
+      durationMin,
       log.worker_count || 1,
-      adamSaat || 0
+      adamSaat,
+      log.stop_reason || "-"
     ]);
   });
 
@@ -336,14 +347,16 @@ function exportExcel() {
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   ws["!cols"] = [
     { wch: 10 }, { wch: 32 }, { wch: 14 }, { wch: 16 }, { wch: 10 },
-    { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 8 }, { wch: 14 }
+    { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 25 }
   ];
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Zaman_Etudu");
 
+  // Dosya adı KİŞİYE ÖZEL iner: etut_test2_2026-09-04.xlsx
+  const cleanName = state.worker.name.replace(/\s+/g, "_").toLowerCase();
   const dateStr = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `kopru_kirisi_etudu_${dateStr}.xlsx`);
+  XLSX.writeFile(wb, `etut_${cleanName}_${dateStr}.xlsx`);
 }
 
 // ---------------- Start Flow ----------------
@@ -375,7 +388,7 @@ function renderStartFlow() {
       } else if (act === "del-jt") {
         e.stopPropagation();
         if (confirm(`"${jt.name}" işlemini silmek istediğinize emin misiniz?`)) {
-          state.jobTypes = state.jobTypes.filter(x => x.id !== jt.id);
+          state.jobTypes = state.jobTypes.filter((x) => x.id !== jt.id);
           saveLS(LS.jobTypes, state.jobTypes);
           renderStartFlow();
         }
@@ -426,7 +439,7 @@ function renderStartFlow() {
       } else if (act === "del-st") {
         e.stopPropagation();
         if (confirm(`"${st.name}" istasyonunu silmek istediğinize emin misiniz?`)) {
-          state.stations = state.stations.filter(x => x.id !== st.id);
+          state.stations = state.stations.filter((x) => x.id !== st.id);
           saveLS(LS.stations, state.stations);
           renderStartFlow();
         }
@@ -491,7 +504,6 @@ setInterval(tick, 1000);
 // ---------------- Başlatma & Event Listeners ----------------
 
 function setupEvents() {
-  // Sorumlu Ekleme Butonları
   if (el("closeAddWorker")) el("closeAddWorker").onclick = () => { el("addWorkerForm").hidden = true; };
   if (el("submitAddWorker")) {
     el("submitAddWorker").onclick = () => {
@@ -522,7 +534,6 @@ function setupEvents() {
     };
   }
 
-  // Modal Butonları
   if (el("closeEditModal")) el("closeEditModal").onclick = closeEditModal;
   if (el("cancelEditModal")) el("cancelEditModal").onclick = closeEditModal;
   if (el("saveEditModal")) {
@@ -540,10 +551,8 @@ function setupEvents() {
     };
   }
 
-  // Excel Butonu
   if (el("exportBtn")) el("exportBtn").onclick = exportExcel;
 
-  // Faaliyet Seçici
   document.querySelectorAll("#activitySelector .selector-btn").forEach((btn) => {
     btn.onclick = () => {
       document.querySelectorAll("#activitySelector .selector-btn").forEach((b) => b.classList.remove("active"));
@@ -552,7 +561,6 @@ function setupEvents() {
     };
   });
 
-  // Kişi Sayısı Seçici
   document.querySelectorAll("#workerCountSelector .selector-btn").forEach((btn) => {
     btn.onclick = () => {
       document.querySelectorAll("#workerCountSelector .selector-btn").forEach((b) => b.classList.remove("active"));
@@ -572,7 +580,6 @@ function setupEvents() {
     };
   }
 
-  // İşlem Başlat / Vazgeç
   if (el("startJobBtn")) {
     el("startJobBtn").onclick = () => {
       state.selJobType = null;
@@ -614,7 +621,6 @@ function setupEvents() {
     };
   }
 
-  // İşlem Bitir
   if (el("endBack")) {
     el("endBack").onclick = () => {
       state.endingLog = null;
@@ -653,7 +659,6 @@ function init() {
   tick();
 }
 
-// Hem doğrudan hem DOMContentLoaded durumunda çalıştır
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", init);
 } else {
