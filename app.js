@@ -28,6 +28,7 @@ let state = {
   logs: [],
   activeLogs: [],
   endingLog: null,
+  editingLogId: null,
   selJobType: null,
   selStation: null,
   selActivity: "İŞLEM",
@@ -38,6 +39,7 @@ const el = (id) => document.getElementById(id);
 
 function showError(msg) {
   const bar = el("errorBar");
+  if (!bar) return;
   if (!msg) { bar.hidden = true; return; }
   bar.textContent = msg;
   bar.hidden = false;
@@ -75,16 +77,18 @@ function initials(name) {
 
 function showScreen(name) {
   ["screenWorkerSelect", "screenDashboard", "screenStart", "screenEnd"].forEach((id) => {
-    el(id).hidden = id !== name;
+    const target = el(id);
+    if (target) target.hidden = id !== name;
   });
 }
 
-// ---------------- İşçi / Sorumlu Yönetimi ----------------
+// ---------------- Sorumlu Yönetimi ----------------
 
 function renderWorkerGrid() {
   const grid = el("workerGrid");
+  if (!grid) return;
   grid.innerHTML = "";
-  
+
   state.workers.forEach((w) => {
     const tile = document.createElement("div");
     tile.className = "worker-tile";
@@ -116,7 +120,10 @@ function renderWorkerGrid() {
   const addBtn = document.createElement("button");
   addBtn.className = "add-worker-tile";
   addBtn.innerHTML = `<span style="font-size:20px;">+</span><span>Sorumlu Ekle</span>`;
-  addBtn.onclick = () => { el("addWorkerForm").hidden = false; };
+  addBtn.onclick = () => { 
+    const f = el("addWorkerForm");
+    if (f) f.hidden = false; 
+  };
   grid.appendChild(addBtn);
 }
 
@@ -135,27 +142,6 @@ function editWorker(w) {
   renderWorkerGrid();
 }
 
-el("closeAddWorker").onclick = () => { el("addWorkerForm").hidden = true; };
-
-el("submitAddWorker").onclick = () => {
-  const id = el("newWorkerId").value.trim();
-  const name = el("newWorkerName").value.trim();
-  if (!id || !name) return;
-
-  if (state.workers.some((w) => w.id === id)) {
-    showError("Bu sicil no zaten kayıtlı.");
-    return;
-  }
-
-  state.workers.push({ id, name });
-  saveLS(LS.workers, state.workers);
-
-  el("newWorkerId").value = "";
-  el("newWorkerName").value = "";
-  el("addWorkerForm").hidden = true;
-  renderWorkerGrid();
-};
-
 function selectWorker(w) {
   state.worker = w;
   el("workerBar").hidden = false;
@@ -164,12 +150,6 @@ function selectWorker(w) {
   showScreen("screenDashboard");
   refreshDashboard();
 }
-
-el("logoutBtn").onclick = () => {
-  state.worker = null;
-  el("workerBar").hidden = true;
-  showScreen("screenWorkerSelect");
-};
 
 // ---------------- Dashboard ----------------
 
@@ -182,6 +162,7 @@ function refreshDashboard() {
 
 function renderDashboard() {
   const container = el("activeJobsList");
+  if (!container) return;
   container.innerHTML = "";
 
   state.activeLogs.forEach((log) => {
@@ -207,7 +188,7 @@ function renderDashboard() {
   const historyBlock = el("historyBlock");
   const userHistory = state.logs
     .filter((l) => l.worker_id === wid && l.status === "done")
-    .slice(-6)
+    .slice(-10)
     .reverse();
 
   if (userHistory.length > 0) {
@@ -216,18 +197,27 @@ function renderDashboard() {
     userHistory.forEach((l) => {
       const durMin = Math.round((new Date(l.end_time) - new Date(l.start_time)) / 60000);
       const adamSaat = ((durMin * (l.worker_count || 1)) / 60).toFixed(2);
+      
       const row = document.createElement("div");
       row.className = "history-row";
       row.innerHTML = `
         <div>
-          <div class="history-name">[${l.activity || "İŞLEM"}] ${l.job_type}</div>
-          <div class="history-sub">${l.station} &middot; ${l.worker_count || 1} Kişi &middot; ${durMin} dk &middot; ${adamSaat} Adam-Saat</div>
+          <div class="history-name" style="font-weight:600; color:#fff;">[${l.activity || "İŞLEM"}] ${l.job_type}</div>
+          <div class="history-sub" style="font-size:12px; color:#aaa;">${l.station} &middot; ${l.worker_count || 1} Kişi &middot; ${durMin} dk &middot; ${adamSaat} Adam-Saat ${l.stop_reason ? `<br><span style="color:#f39c12;">Duruş: ${l.stop_reason}</span>` : ""}</div>
         </div>
-        <div>
-          <div class="history-time">${fmtTime(l.start_time)}&ndash;${fmtTime(l.end_time)}</div>
-          <div class="history-done">Tamamlandı</div>
+        <div class="history-actions">
+          <div style="text-align:right; margin-right:4px;">
+            <div class="history-time" style="font-family:monospace; font-size:12px;">${fmtTime(l.start_time)}&ndash;${fmtTime(l.end_time)}</div>
+            <div class="history-done" style="font-size:11px; color:#2ecc71;">Tamamlandı</div>
+          </div>
+          <button class="item-action-btn" title="Düzenle" data-act="edit">✏️</button>
+          <button class="item-action-btn btn-del" title="Sil" data-act="del">🗑️</button>
         </div>
       `;
+
+      row.querySelector('[data-act="edit"]').onclick = () => openEditModal(l);
+      row.querySelector('[data-act="del"]').onclick = () => deleteHistoryLog(l.id);
+
       historyList.appendChild(row);
     });
   } else {
@@ -235,18 +225,39 @@ function renderDashboard() {
   }
 }
 
-// ---------------- Görseldeki Gibi Excel Çıktısı ----------------
+// ---------------- Modal Yönetimi ----------------
 
-el("exportBtn").onclick = () => {
+function openEditModal(log) {
+  state.editingLogId = log.id;
+  el("modalJobTitle").textContent = `[${log.activity}] ${log.job_type}`;
+  el("modalWorkerCount").value = log.worker_count || 1;
+  el("modalStopReason").value = log.stop_reason || "";
+  el("modalNote").value = log.note || "";
+  el("editLogModal").hidden = false;
+}
+
+function closeEditModal() {
+  state.editingLogId = null;
+  el("editLogModal").hidden = true;
+}
+
+function deleteHistoryLog(id) {
+  if (!confirm("Bu işlem kaydını listeden ve etüt tablosundan silmek istediğinize emin misiniz?")) return;
+  state.logs = state.logs.filter(l => l.id !== id);
+  saveLS(LS.logs, state.logs);
+  refreshDashboard();
+}
+
+// ---------------- Excel Çıktısı (Kambeton Formatı) ----------------
+
+function exportExcel() {
   if (state.logs.length === 0) {
     alert("Dışa aktarılacak kayıt bulunmuyor.");
     return;
   }
 
-  // İlk işin başlangıç zamanı = 0. dakika referansı
   const baseTime = new Date(state.logs[0].start_time).getTime();
 
-  // Excel Başlık ve Tablo Sütunları
   const wsData = [
     ["KÖPRÜ KİRİŞİ ETÜDÜ - ZAMAN ETÜDÜ FORMU"],
     ["Tarih:", new Date().toLocaleDateString("tr-TR"), "", "Tesis / Firma:", "KAMBETON A.Ş."],
@@ -287,7 +298,6 @@ el("exportBtn").onclick = () => {
       durationMin = Math.max(0, Math.round((endMs - startMs) / 60000));
       adamSaat = Number(((durationMin * (log.worker_count || 1)) / 60).toFixed(2));
 
-      // Faaliyet toplamları
       const act = (log.activity || "İŞLEM").toUpperCase();
       if (act === "İŞLEM") sumIslem += durationMin;
       else if (act === "TAŞIMA") sumTasima += durationMin;
@@ -313,7 +323,6 @@ el("exportBtn").onclick = () => {
 
   const totalFaaliyet = sumIslem + sumTasima + sumBekleme + sumHazirlik;
 
-  // Görseldeki gibi alt özet tablosu
   wsData.push([]);
   wsData.push([]);
   wsData.push(["FAALİYET", "SÜRE (DK)", "", "ÖZET TABLOSU", "DEĞER"]);
@@ -325,19 +334,9 @@ el("exportBtn").onclick = () => {
   wsData.push(["", "", "", "TOPLAM FAALİYET SÜRESİ", totalFaaliyet]);
 
   const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-  // Sütun genişlikleri
   ws["!cols"] = [
-    { wch: 10 }, // İŞLEM NO
-    { wch: 32 }, // İŞLEM ADI
-    { wch: 14 }, // FAALİYET
-    { wch: 16 }, // BAŞLANGIÇ SAATİ
-    { wch: 10 }, // BAŞLAMA
-    { wch: 14 }, // BİTİŞ SAATİ
-    { wch: 10 }, // BİTİŞ
-    { wch: 12 }, // SÜRE (dk)
-    { wch: 8 },  // KİŞİ
-    { wch: 14 }  // ADAM SAAT
+    { wch: 10 }, { wch: 32 }, { wch: 14 }, { wch: 16 }, { wch: 10 },
+    { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 8 }, { wch: 14 }
   ];
 
   const wb = XLSX.utils.book_new();
@@ -345,49 +344,13 @@ el("exportBtn").onclick = () => {
 
   const dateStr = new Date().toISOString().slice(0, 10);
   XLSX.writeFile(wb, `kopru_kirisi_etudu_${dateStr}.xlsx`);
-};
+}
 
-// ---------------- Start Flow Dinleyicileri ----------------
-
-// 1. Faaliyet Seçimi
-document.querySelectorAll("#activitySelector .selector-btn").forEach((btn) => {
-  btn.onclick = () => {
-    document.querySelectorAll("#activitySelector .selector-btn").forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    state.selActivity = btn.getAttribute("data-val");
-  };
-});
-
-// 2. Kişi Sayısı Seçimi
-document.querySelectorAll("#workerCountSelector .selector-btn").forEach((btn) => {
-  btn.onclick = () => {
-    document.querySelectorAll("#workerCountSelector .selector-btn").forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    state.workerCount = parseInt(btn.getAttribute("data-count"));
-    el("customWorkerCount").value = "";
-  };
-});
-
-el("customWorkerCount").oninput = (e) => {
-  const val = parseInt(e.target.value);
-  if (val && val > 0) {
-    document.querySelectorAll("#workerCountSelector .selector-btn").forEach((b) => b.classList.remove("active"));
-    state.workerCount = val;
-  }
-};
-
-el("startJobBtn").onclick = () => {
-  state.selJobType = null;
-  state.selStation = null;
-  el("startNote").value = "";
-  renderStartFlow();
-  showScreen("screenStart");
-};
-el("startBack").onclick = () => showScreen("screenDashboard");
+// ---------------- Start Flow ----------------
 
 function renderStartFlow() {
-  // İşlem Adları Grid
   const jtGrid = el("jobTypeGrid");
+  if (!jtGrid) return;
   jtGrid.innerHTML = "";
   state.jobTypes.forEach((jt) => {
     const tile = document.createElement("div");
@@ -428,7 +391,7 @@ function renderStartFlow() {
   addJtBtn.className = "add-item-tile";
   addJtBtn.innerHTML = `<span>+ İşlem Adı Ekle</span>`;
   addJtBtn.onclick = () => {
-    const n = prompt("Yeni İşlem Adı (Örn: Çadır kapatma, Halat kesimi):");
+    const n = prompt("Yeni İşlem Adı (Örn: Halat kesimi):");
     if (n && n.trim()) {
       state.jobTypes.push({ id: Date.now(), name: n.trim() });
       saveLS(LS.jobTypes, state.jobTypes);
@@ -437,8 +400,8 @@ function renderStartFlow() {
   };
   jtGrid.appendChild(addJtBtn);
 
-  // İstasyonlar Grid
   const stGrid = el("stationGrid");
+  if (!stGrid) return;
   stGrid.innerHTML = "";
   state.stations.forEach((st) => {
     const tile = document.createElement("div");
@@ -488,35 +451,10 @@ function renderStartFlow() {
   };
   stGrid.appendChild(addStBtn);
 
-  el("confirmStartBtn").disabled = !(state.selJobType && state.selStation);
+  if (el("confirmStartBtn")) {
+    el("confirmStartBtn").disabled = !(state.selJobType && state.selStation);
+  }
 }
-
-el("confirmStartBtn").onclick = () => {
-  if (!state.selJobType || !state.selStation) return;
-  const now = new Date();
-
-  const newLog = {
-    id: "log-" + Date.now(),
-    worker_id: state.worker.id,
-    worker_name: state.worker.name,
-    job_type: state.selJobType,
-    activity: state.selActivity || "İŞLEM",
-    station: state.selStation,
-    worker_count: state.workerCount || 1,
-    shift: getShiftLabel(now),
-    start_time: now.toISOString(),
-    end_time: null,
-    note: el("startNote").value.trim(),
-    stop_reason: "",
-    status: "active",
-  };
-
-  state.logs.push(newLog);
-  saveLS(LS.logs, state.logs);
-
-  showScreen("screenDashboard");
-  refreshDashboard();
-};
 
 // ---------------- End Flow ----------------
 
@@ -528,33 +466,12 @@ function openEndFlow(log) {
   showScreen("screenEnd");
 }
 
-el("endBack").onclick = () => {
-  state.endingLog = null;
-  showScreen("screenDashboard");
-};
-
-el("confirmEndBtn").onclick = () => {
-  if (!state.endingLog) return;
-  
-  const target = state.logs.find((l) => l.id === state.endingLog.id);
-  if (target) {
-    target.end_time = new Date().toISOString();
-    target.stop_reason = el("endStopReason").value.trim();
-    target.status = "done";
-    saveLS(LS.logs, state.logs);
-  }
-
-  state.endingLog = null;
-  showScreen("screenDashboard");
-  refreshDashboard();
-};
-
-// ---------------- Saat & Sayaçlar ----------------
+// ---------------- Sayaçlar ----------------
 
 function tick() {
   const now = new Date();
-  el("clock").textContent = now.toLocaleTimeString("tr-TR");
-  if (state.worker) el("shiftLabel").textContent = getShiftLabel(now);
+  if (el("clock")) el("clock").textContent = now.toLocaleTimeString("tr-TR");
+  if (state.worker && el("shiftLabel")) el("shiftLabel").textContent = getShiftLabel(now);
 
   if (!el("screenDashboard").hidden && state.activeLogs.length > 0) {
     state.activeLogs.forEach((log) => {
@@ -571,7 +488,158 @@ function tick() {
 }
 setInterval(tick, 1000);
 
-// ---------------- Başlatma ----------------
+// ---------------- Başlatma & Event Listeners ----------------
+
+function setupEvents() {
+  // Sorumlu Ekleme Butonları
+  if (el("closeAddWorker")) el("closeAddWorker").onclick = () => { el("addWorkerForm").hidden = true; };
+  if (el("submitAddWorker")) {
+    el("submitAddWorker").onclick = () => {
+      const id = el("newWorkerId").value.trim();
+      const name = el("newWorkerName").value.trim();
+      if (!id || !name) return;
+
+      if (state.workers.some((w) => w.id === id)) {
+        showError("Bu sicil no zaten kayıtlı.");
+        return;
+      }
+
+      state.workers.push({ id, name });
+      saveLS(LS.workers, state.workers);
+
+      el("newWorkerId").value = "";
+      el("newWorkerName").value = "";
+      el("addWorkerForm").hidden = true;
+      renderWorkerGrid();
+    };
+  }
+
+  if (el("logoutBtn")) {
+    el("logoutBtn").onclick = () => {
+      state.worker = null;
+      el("workerBar").hidden = true;
+      showScreen("screenWorkerSelect");
+    };
+  }
+
+  // Modal Butonları
+  if (el("closeEditModal")) el("closeEditModal").onclick = closeEditModal;
+  if (el("cancelEditModal")) el("cancelEditModal").onclick = closeEditModal;
+  if (el("saveEditModal")) {
+    el("saveEditModal").onclick = () => {
+      if (!state.editingLogId) return;
+      const target = state.logs.find((l) => l.id === state.editingLogId);
+      if (target) {
+        target.worker_count = parseInt(el("modalWorkerCount").value) || 1;
+        target.stop_reason = el("modalStopReason").value.trim();
+        target.note = el("modalNote").value.trim();
+        saveLS(LS.logs, state.logs);
+      }
+      closeEditModal();
+      refreshDashboard();
+    };
+  }
+
+  // Excel Butonu
+  if (el("exportBtn")) el("exportBtn").onclick = exportExcel;
+
+  // Faaliyet Seçici
+  document.querySelectorAll("#activitySelector .selector-btn").forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll("#activitySelector .selector-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.selActivity = btn.getAttribute("data-val");
+    };
+  });
+
+  // Kişi Sayısı Seçici
+  document.querySelectorAll("#workerCountSelector .selector-btn").forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll("#workerCountSelector .selector-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.workerCount = parseInt(btn.getAttribute("data-count"));
+      if (el("customWorkerCount")) el("customWorkerCount").value = "";
+    };
+  });
+
+  if (el("customWorkerCount")) {
+    el("customWorkerCount").oninput = (e) => {
+      const val = parseInt(e.target.value);
+      if (val && val > 0) {
+        document.querySelectorAll("#workerCountSelector .selector-btn").forEach((b) => b.classList.remove("active"));
+        state.workerCount = val;
+      }
+    };
+  }
+
+  // İşlem Başlat / Vazgeç
+  if (el("startJobBtn")) {
+    el("startJobBtn").onclick = () => {
+      state.selJobType = null;
+      state.selStation = null;
+      el("startNote").value = "";
+      renderStartFlow();
+      showScreen("screenStart");
+    };
+  }
+
+  if (el("startBack")) el("startBack").onclick = () => showScreen("screenDashboard");
+
+  if (el("confirmStartBtn")) {
+    el("confirmStartBtn").onclick = () => {
+      if (!state.selJobType || !state.selStation) return;
+      const now = new Date();
+
+      const newLog = {
+        id: "log-" + Date.now(),
+        worker_id: state.worker.id,
+        worker_name: state.worker.name,
+        job_type: state.selJobType,
+        activity: state.selActivity || "İŞLEM",
+        station: state.selStation,
+        worker_count: state.workerCount || 1,
+        shift: getShiftLabel(now),
+        start_time: now.toISOString(),
+        end_time: null,
+        note: el("startNote").value.trim(),
+        stop_reason: "",
+        status: "active",
+      };
+
+      state.logs.push(newLog);
+      saveLS(LS.logs, state.logs);
+
+      showScreen("screenDashboard");
+      refreshDashboard();
+    };
+  }
+
+  // İşlem Bitir
+  if (el("endBack")) {
+    el("endBack").onclick = () => {
+      state.endingLog = null;
+      showScreen("screenDashboard");
+    };
+  }
+
+  if (el("confirmEndBtn")) {
+    el("confirmEndBtn").onclick = () => {
+      if (!state.endingLog) return;
+      
+      const target = state.logs.find((l) => l.id === state.endingLog.id);
+      if (target) {
+        target.end_time = new Date().toISOString();
+        target.stop_reason = el("endStopReason").value.trim();
+        target.status = "done";
+        saveLS(LS.logs, state.logs);
+      }
+
+      state.endingLog = null;
+      showScreen("screenDashboard");
+      refreshDashboard();
+    };
+  }
+}
 
 function init() {
   state.workers = loadLS(LS.workers, []);
@@ -579,15 +647,15 @@ function init() {
   state.stations = loadLS(LS.stations, []);
   state.logs = loadLS(LS.logs, []);
 
+  setupEvents();
   renderWorkerGrid();
   showScreen("screenWorkerSelect");
   tick();
 }
 
-init();
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
-  });
+// Hem doğrudan hem DOMContentLoaded durumunda çalıştır
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
 }
