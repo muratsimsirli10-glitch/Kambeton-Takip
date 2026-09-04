@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<title>Kambeton - İş Takip</title>
+
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#1C1D1F" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Kambeton" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="icon" href="icons/icon-192.png" />
+
+<link rel="stylesheet" href="style.css" />
+<style>
+  .worker-tile, .tile {
+    position: relative;
+    user-select: none;
+  }
+  .tile-actions, .worker-tile-actions {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+    gap: 5px;
+    z-index: 5;
+  }
+  .item-action-btn, .worker-action-btn {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 2px 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #e0e0e0;
+    transition: all 0.2s;
+  }
+  .item-action-btn:hover, .worker-action-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+  .btn-del:hover {
+    background: #e74c3c !important;
+    border-color: #e74c3c !important;
+    color: #fff !important;
+  }
+  .add-item-tile {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    color: #aaa;
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: 0.2s;
+  }
+  .add-item-tile:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border-color: #fff;
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<div id="app" class="app">
+
+  <header class="header">
+    <div class="header-top">
+      <div class="brand"><span class="dot"></span>Kambeton &middot; İş Takip</div>
+      <div class="clock" id="clock">--:--:--</div>
+    </div>
+    <div class="worker-bar" id="workerBar" hidden>
+      <div class="worker-info">
+        <span id="workerName"></span>
+        <span class="muted">&middot; Sicil <span id="workerId"></span></span>
+        <span class="muted">&middot; Vardiya <span id="shiftLabel"></span></span>
+      </div>
+      <button class="btn-ghost" id="logoutBtn">Çıkış Yap</button>
+    </div>
+  </header>
+  <div class="hazard-strip"></div>
+
+  <div id="errorBar" class="error-bar" hidden></div>
+
+  <main class="main">
+
+    <!-- İŞÇİ SEÇİMİ -->
+    <section id="screenWorkerSelect" class="screen">
+      <div class="section-label">İşçiyi Seç</div>
+      <div class="tile-grid" id="workerGrid"></div>
+
+      <div id="addWorkerForm" class="panel" hidden>
+        <div class="panel-head">
+          <span>Yeni İşçi Ekle</span>
+          <button class="btn-icon" id="closeAddWorker">&times;</button>
+        </div>
+        <div class="form-row">
+          <input id="newWorkerId" placeholder="Sicil No" />
+          <input id="newWorkerName" placeholder="Ad Soyad" />
+          <button class="btn-primary" id="submitAddWorker">Ekle</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ANA PANEL -->
+    <section id="screenDashboard" class="screen" hidden>
+
+      <div id="activeJobCard" class="active-card" hidden>
+        <div class="active-tag"><span class="pulse-dot"></span>Devam Eden İş</div>
+        <div class="active-title" id="activeJobType"></div>
+        <div class="active-meta">
+          <span id="activeStation"></span>
+          <span>Başlangıç <span id="activeStart"></span></span>
+        </div>
+        <div class="timer" id="activeTimer">00:00:00</div>
+        <button class="btn-danger btn-block" id="endJobBtn">İŞİ BİTİR</button>
+      </div>
+
+      <button class="btn-start" id="startJobBtn" hidden>YENİ İŞ BAŞLAT</button>
+
+      <div id="historyBlock" hidden>
+        <div class="section-label">Son Tamamlanan İşlerim</div>
+        <div id="historyList" class="list-col"></div>
+      </div>
+
+      <div class="export-block">
+        <button class="btn-ghost" id="exportBtn">Tüm Kayıtları Excel'e Aktar</button>
+      </div>
+    </section>
+
+    <!-- İŞ BAŞLAT AKIŞI -->
+    <section id="screenStart" class="screen" hidden>
+      <button class="btn-back" id="startBack">&larr; Vazgeç</button>
+
+      <div class="section-label">1. İş Türü</div>
+      <div class="tile-grid" id="jobTypeGrid"></div>
+
+      <div class="section-label">2. İstasyon / Makine</div>
+      <div class="tile-grid" id="stationGrid"></div>
+
+      <div class="section-label">3. Not (İsteğe bağlı)</div>
+      <textarea id="startNote" placeholder="Örnek: 3 numaralı mikser için karışım hazırlanıyor"></textarea>
+
+      <button class="btn-start btn-block" id="confirmStartBtn" disabled>İŞE BAŞLA</button>
+    </section>
+
+    <!-- İŞ BİTİR AKIŞI -->
+    <section id="screenEnd" class="screen" hidden>
+      <button class="btn-back" id="endBack">&larr; Vazgeç</button>
+
+      <div class="panel">
+        <div class="active-title" id="endJobType"></div>
+        <div class="active-meta"><span id="endMeta"></span></div>
+        <div class="timer" id="endTimer">00:00:00</div>
+      </div>
+
+      <div class="section-label">Not (İsteğe bağlı)</div>
+      <textarea id="endNote" placeholder="Örnek: İş tamamlandı, hat temizlendi"></textarea>
+
+      <button class="btn-danger btn-block" id="confirmEndBtn">İŞİ BİTİR</button>
+    </section>
+
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

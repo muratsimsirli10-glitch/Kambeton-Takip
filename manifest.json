@@ -1,0 +1,15 @@
+{
+  "name": "Kambeton İş Takip",
+  "short_name": "Kambeton",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#1C1D1F",
+  "theme_color": "#1C1D1F",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
