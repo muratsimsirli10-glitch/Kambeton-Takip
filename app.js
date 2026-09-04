@@ -26,10 +26,12 @@ let state = {
   jobTypes: [],
   stations: [],
   logs: [],
-  activeLogs: [], // Çoklu aktif iş listesi
-  endingLog: null, // O an bitirilmek istenen spesifik iş
+  activeLogs: [],
+  endingLog: null,
   selJobType: null,
   selStation: null,
+  selActivity: "İŞLEM",
+  workerCount: 2,
 };
 
 const el = (id) => document.getElementById(id);
@@ -77,7 +79,7 @@ function showScreen(name) {
   });
 }
 
-// ---------------- İşçi Yönetimi ----------------
+// ---------------- İşçi / Sorumlu Yönetimi ----------------
 
 function renderWorkerGrid() {
   const grid = el("workerGrid");
@@ -89,7 +91,7 @@ function renderWorkerGrid() {
     tile.innerHTML = `
       <div class="worker-tile-actions">
         <button class="worker-action-btn" title="İsmi Düzenle" data-action="edit">✏️</button>
-        <button class="worker-action-btn btn-del" title="İşçiyi Sil" data-action="delete">🗑️</button>
+        <button class="worker-action-btn btn-del" title="Sil" data-action="delete">🗑️</button>
       </div>
       <div class="worker-avatar">${initials(w.name)}</div>
       <div class="worker-tile-name">${w.name}</div>
@@ -113,13 +115,13 @@ function renderWorkerGrid() {
 
   const addBtn = document.createElement("button");
   addBtn.className = "add-worker-tile";
-  addBtn.innerHTML = `<span style="font-size:20px;">+</span><span>İşçi Ekle</span>`;
+  addBtn.innerHTML = `<span style="font-size:20px;">+</span><span>Sorumlu Ekle</span>`;
   addBtn.onclick = () => { el("addWorkerForm").hidden = false; };
   grid.appendChild(addBtn);
 }
 
 function deleteWorker(w) {
-  if (!confirm(`"${w.name}" (Sicil: ${w.id}) isimli işçiyi silmek istediğinize emin misiniz?`)) return;
+  if (!confirm(`"${w.name}" kaydını silmek istediğinize emin misiniz?`)) return;
   state.workers = state.workers.filter((item) => item.id !== w.id);
   saveLS(LS.workers, state.workers);
   renderWorkerGrid();
@@ -174,8 +176,6 @@ el("logoutBtn").onclick = () => {
 function refreshDashboard() {
   if (!state.worker) return;
   const wid = state.worker.id;
-
-  // Seçili işçiye ait TÜM aktif işleri getir
   state.activeLogs = state.logs.filter((l) => l.worker_id === wid && l.status === "active");
   renderDashboard();
 }
@@ -184,26 +184,24 @@ function renderDashboard() {
   const container = el("activeJobsList");
   container.innerHTML = "";
 
-  // Aktif iş kartlarını oluştur
   state.activeLogs.forEach((log) => {
     const card = document.createElement("div");
     card.className = "active-card";
     card.innerHTML = `
-      <div class="active-tag"><span class="pulse-dot"></span>Devam Eden İş</div>
+      <div class="active-tag"><span class="pulse-dot"></span>${log.activity || "İŞLEM"} &middot; ${log.worker_count || 1} Kişi</div>
       <div class="active-title">${log.job_type}</div>
       <div class="active-meta">
         <span>${log.station}</span>
         <span>Başlangıç ${fmtTime(log.start_time)}</span>
       </div>
       <div class="timer" id="timer-${log.id}">00:00:00</div>
-      <button class="btn-danger btn-block" style="margin-top:12px;">İŞİ BİTİR</button>
+      <button class="btn-danger btn-block" style="margin-top:12px;">İŞLEMİ BİTİR</button>
     `;
 
     card.querySelector("button").onclick = () => openEndFlow(log);
     container.appendChild(card);
   });
 
-  // Geçmiş listesi
   const wid = state.worker.id;
   const historyList = el("historyList");
   const historyBlock = el("historyBlock");
@@ -216,12 +214,14 @@ function renderDashboard() {
     historyBlock.hidden = false;
     historyList.innerHTML = "";
     userHistory.forEach((l) => {
+      const durMin = Math.round((new Date(l.end_time) - new Date(l.start_time)) / 60000);
+      const adamSaat = ((durMin * (l.worker_count || 1)) / 60).toFixed(2);
       const row = document.createElement("div");
       row.className = "history-row";
       row.innerHTML = `
         <div>
-          <div class="history-name">${l.job_type}</div>
-          <div class="history-sub">${l.station} &middot; ${fmtDate(l.start_time)}</div>
+          <div class="history-name">[${l.activity || "İŞLEM"}] ${l.job_type}</div>
+          <div class="history-sub">${l.station} &middot; ${l.worker_count || 1} Kişi &middot; ${durMin} dk &middot; ${adamSaat} Adam-Saat</div>
         </div>
         <div>
           <div class="history-time">${fmtTime(l.start_time)}&ndash;${fmtTime(l.end_time)}</div>
@@ -235,7 +235,7 @@ function renderDashboard() {
   }
 }
 
-// ---------------- Excel Dışa Aktarma ----------------
+// ---------------- Görseldeki Gibi Excel Çıktısı ----------------
 
 el("exportBtn").onclick = () => {
   if (state.logs.length === 0) {
@@ -243,41 +243,138 @@ el("exportBtn").onclick = () => {
     return;
   }
 
-  const rows = [
-    ["Sicil No", "Ad Soyad", "İş Türü", "İstasyon", "Vardiya", "Tarih", "Başlangıç", "Bitiş", "Süre (dk)", "Durum", "Not", "Bitiş Notu"]
+  // İlk işin başlangıç zamanı = 0. dakika referansı
+  const baseTime = new Date(state.logs[0].start_time).getTime();
+
+  // Excel Başlık ve Tablo Sütunları
+  const wsData = [
+    ["KÖPRÜ KİRİŞİ ETÜDÜ - ZAMAN ETÜDÜ FORMU"],
+    ["Tarih:", new Date().toLocaleDateString("tr-TR"), "", "Tesis / Firma:", "KAMBETON A.Ş."],
+    [],
+    [
+      "İŞLEM NO",
+      "İŞLEM ADI",
+      "FAALİYET",
+      "BAŞLANGIÇ SAATİ",
+      "BAŞLAMA",
+      "BİTİŞ SAATİ",
+      "BİTİŞ",
+      "SÜRE (dk)",
+      "KİŞİ",
+      "ADAM SAAT"
+    ]
   ];
 
-  state.logs.forEach((log) => {
-    let durationMin = "";
+  let sumIslem = 0;
+  let sumTasima = 0;
+  let sumBekleme = 0;
+  let sumHazirlik = 0;
+  let sumAdamSaat = 0;
+
+  state.logs.forEach((log, index) => {
+    const startMs = new Date(log.start_time).getTime();
+    const baslamaDakika = Math.max(0, Math.round((startMs - baseTime) / 60000));
+
+    let bitisSaatStr = "-";
+    let bitisDakikaStr = "-";
+    let durationMin = 0;
+    let adamSaat = 0;
+
     if (log.end_time) {
-      durationMin = Math.round((new Date(log.end_time) - new Date(log.start_time)) / 60000);
+      const endMs = new Date(log.end_time).getTime();
+      bitisSaatStr = fmtTime(log.end_time);
+      bitisDakikaStr = Math.max(0, Math.round((endMs - baseTime) / 60000));
+      durationMin = Math.max(0, Math.round((endMs - startMs) / 60000));
+      adamSaat = Number(((durationMin * (log.worker_count || 1)) / 60).toFixed(2));
+
+      // Faaliyet toplamları
+      const act = (log.activity || "İŞLEM").toUpperCase();
+      if (act === "İŞLEM") sumIslem += durationMin;
+      else if (act === "TAŞIMA") sumTasima += durationMin;
+      else if (act === "BEKLEME") sumBekleme += durationMin;
+      else if (act === "HAZIRLIK") sumHazirlik += durationMin;
+
+      sumAdamSaat += adamSaat;
     }
-    const d = new Date(log.start_time);
-    rows.push([
-      log.worker_id,
-      log.worker_name,
+
+    wsData.push([
+      index + 1,
       log.job_type,
-      log.station,
-      log.shift,
-      d.toLocaleDateString("tr-TR"),
+      log.activity || "İŞLEM",
       fmtTime(log.start_time),
-      log.end_time ? fmtTime(log.end_time) : "",
-      durationMin,
-      log.status === "done" ? "Tamamlandı" : "Devam ediyor",
-      log.note || "",
-      log.end_note || ""
+      baslamaDakika,
+      bitisSaatStr,
+      bitisDakikaStr,
+      durationMin || "",
+      log.worker_count || 1,
+      adamSaat || 0
     ]);
   });
 
-  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const totalFaaliyet = sumIslem + sumTasima + sumBekleme + sumHazirlik;
+
+  // Görseldeki gibi alt özet tablosu
+  wsData.push([]);
+  wsData.push([]);
+  wsData.push(["FAALİYET", "SÜRE (DK)", "", "ÖZET TABLOSU", "DEĞER"]);
+  wsData.push(["İŞLEM", sumIslem, "", "TOPLAM İŞLEM SÜRESİ", sumIslem]);
+  wsData.push(["TAŞIMA", sumTasima, "", "TOPLAM TAŞIMA SÜRESİ", sumTasima]);
+  wsData.push(["BEKLEME", sumBekleme, "", "TOPLAM BEKLEME SÜRESİ", sumBekleme]);
+  wsData.push(["HAZIRLIK", sumHazirlik, "", "TOPLAM HAZIRLIK SÜRESİ", sumHazirlik]);
+  wsData.push(["", "", "", "TOPLAM ADAM SAAT SÜR.", Number(sumAdamSaat.toFixed(2))]);
+  wsData.push(["", "", "", "TOPLAM FAALİYET SÜRESİ", totalFaaliyet]);
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Sütun genişlikleri
+  ws["!cols"] = [
+    { wch: 10 }, // İŞLEM NO
+    { wch: 32 }, // İŞLEM ADI
+    { wch: 14 }, // FAALİYET
+    { wch: 16 }, // BAŞLANGIÇ SAATİ
+    { wch: 10 }, // BAŞLAMA
+    { wch: 14 }, // BİTİŞ SAATİ
+    { wch: 10 }, // BİTİŞ
+    { wch: 12 }, // SÜRE (dk)
+    { wch: 8 },  // KİŞİ
+    { wch: 14 }  // ADAM SAAT
+  ];
+
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "İş Kayıtları");
+  XLSX.utils.book_append_sheet(wb, ws, "Zaman_Etudu");
 
   const dateStr = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `kambeton_is_kayitlari_${dateStr}.xlsx`);
+  XLSX.writeFile(wb, `kopru_kirisi_etudu_${dateStr}.xlsx`);
 };
 
-// ---------------- Start Flow ----------------
+// ---------------- Start Flow Dinleyicileri ----------------
+
+// 1. Faaliyet Seçimi
+document.querySelectorAll("#activitySelector .selector-btn").forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll("#activitySelector .selector-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    state.selActivity = btn.getAttribute("data-val");
+  };
+});
+
+// 2. Kişi Sayısı Seçimi
+document.querySelectorAll("#workerCountSelector .selector-btn").forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll("#workerCountSelector .selector-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    state.workerCount = parseInt(btn.getAttribute("data-count"));
+    el("customWorkerCount").value = "";
+  };
+});
+
+el("customWorkerCount").oninput = (e) => {
+  const val = parseInt(e.target.value);
+  if (val && val > 0) {
+    document.querySelectorAll("#workerCountSelector .selector-btn").forEach((b) => b.classList.remove("active"));
+    state.workerCount = val;
+  }
+};
 
 el("startJobBtn").onclick = () => {
   state.selJobType = null;
@@ -289,6 +386,7 @@ el("startJobBtn").onclick = () => {
 el("startBack").onclick = () => showScreen("screenDashboard");
 
 function renderStartFlow() {
+  // İşlem Adları Grid
   const jtGrid = el("jobTypeGrid");
   jtGrid.innerHTML = "";
   state.jobTypes.forEach((jt) => {
@@ -305,7 +403,7 @@ function renderStartFlow() {
       const act = e.target.getAttribute("data-action");
       if (act === "edit-jt") {
         e.stopPropagation();
-        const n = prompt("İş Türünü Güncelle:", jt.name);
+        const n = prompt("İşlem Adını Güncelle:", jt.name);
         if (n && n.trim()) {
           jt.name = n.trim();
           saveLS(LS.jobTypes, state.jobTypes);
@@ -313,7 +411,7 @@ function renderStartFlow() {
         }
       } else if (act === "del-jt") {
         e.stopPropagation();
-        if (confirm(`"${jt.name}" iş türünü silmek istediğinize emin misiniz?`)) {
+        if (confirm(`"${jt.name}" işlemini silmek istediğinize emin misiniz?`)) {
           state.jobTypes = state.jobTypes.filter(x => x.id !== jt.id);
           saveLS(LS.jobTypes, state.jobTypes);
           renderStartFlow();
@@ -328,9 +426,9 @@ function renderStartFlow() {
 
   const addJtBtn = document.createElement("div");
   addJtBtn.className = "add-item-tile";
-  addJtBtn.innerHTML = `<span>+ İş Türü Ekle</span>`;
+  addJtBtn.innerHTML = `<span>+ İşlem Adı Ekle</span>`;
   addJtBtn.onclick = () => {
-    const n = prompt("Yeni İş Türü adı:");
+    const n = prompt("Yeni İşlem Adı (Örn: Çadır kapatma, Halat kesimi):");
     if (n && n.trim()) {
       state.jobTypes.push({ id: Date.now(), name: n.trim() });
       saveLS(LS.jobTypes, state.jobTypes);
@@ -339,6 +437,7 @@ function renderStartFlow() {
   };
   jtGrid.appendChild(addJtBtn);
 
+  // İstasyonlar Grid
   const stGrid = el("stationGrid");
   stGrid.innerHTML = "";
   state.stations.forEach((st) => {
@@ -378,9 +477,9 @@ function renderStartFlow() {
 
   const addStBtn = document.createElement("div");
   addStBtn.className = "add-item-tile";
-  addStBtn.innerHTML = `<span>+ İstasyon Ekle</span>`;
+  addStBtn.innerHTML = `<span>+ İstasyon / Hat Ekle</span>`;
   addStBtn.onclick = () => {
-    const n = prompt("Yeni İstasyon / Makine adı:");
+    const n = prompt("Yeni İstasyon / Hat Adı:");
     if (n && n.trim()) {
       state.stations.push({ id: Date.now(), name: n.trim() });
       saveLS(LS.stations, state.stations);
@@ -401,12 +500,14 @@ el("confirmStartBtn").onclick = () => {
     worker_id: state.worker.id,
     worker_name: state.worker.name,
     job_type: state.selJobType,
+    activity: state.selActivity || "İŞLEM",
     station: state.selStation,
+    worker_count: state.workerCount || 1,
     shift: getShiftLabel(now),
     start_time: now.toISOString(),
     end_time: null,
     note: el("startNote").value.trim(),
-    end_note: "",
+    stop_reason: "",
     status: "active",
   };
 
@@ -422,8 +523,8 @@ el("confirmStartBtn").onclick = () => {
 function openEndFlow(log) {
   state.endingLog = log;
   el("endJobType").textContent = log.job_type;
-  el("endMeta").textContent = `${log.station} \u00b7 Başlangıç ${fmtTime(log.start_time)}`;
-  el("endNote").value = "";
+  el("endMeta").textContent = `[${log.activity || "İŞLEM"}] ${log.station} \u00b7 ${log.worker_count || 1} Kişi \u00b7 Başlangıç ${fmtTime(log.start_time)}`;
+  el("endStopReason").value = "";
   showScreen("screenEnd");
 }
 
@@ -438,7 +539,7 @@ el("confirmEndBtn").onclick = () => {
   const target = state.logs.find((l) => l.id === state.endingLog.id);
   if (target) {
     target.end_time = new Date().toISOString();
-    target.end_note = el("endNote").value.trim();
+    target.stop_reason = el("endStopReason").value.trim();
     target.status = "done";
     saveLS(LS.logs, state.logs);
   }
@@ -448,14 +549,13 @@ el("confirmEndBtn").onclick = () => {
   refreshDashboard();
 };
 
-// ---------------- Saat & Zamanlayıcılar ----------------
+// ---------------- Saat & Sayaçlar ----------------
 
 function tick() {
   const now = new Date();
   el("clock").textContent = now.toLocaleTimeString("tr-TR");
   if (state.worker) el("shiftLabel").textContent = getShiftLabel(now);
 
-  // Ana paneldeki tüm aktif kartların sayaçlarını canlı güncelle
   if (!el("screenDashboard").hidden && state.activeLogs.length > 0) {
     state.activeLogs.forEach((log) => {
       const timerDom = document.getElementById(`timer-${log.id}`);
@@ -465,7 +565,6 @@ function tick() {
     });
   }
 
-  // Bitir ekranı açıksa onun sayacını güncelle
   if (state.endingLog && !el("screenEnd").hidden) {
     el("endTimer").textContent = fmtDuration(now - new Date(state.endingLog.start_time));
   }
