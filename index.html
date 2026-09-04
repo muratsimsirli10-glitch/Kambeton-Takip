@@ -5,301 +5,404 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 <title>Kambeton - Zaman Etüdü</title>
 
-<link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#1C1D1F" />
-<link rel="stylesheet" href="style.css" />
 <style>
-  .worker-tile, .tile { position: relative; user-select: none; }
-  .tile-actions, .worker-tile-actions {
-    position: absolute; top: 6px; right: 6px; display: flex; gap: 5px; z-index: 5;
+  :root {
+    --bg: #151618;
+    --card: #202225;
+    --card-border: #32353b;
+    --orange: #ff6a13;
+    --orange-hover: #e65a07;
+    --danger: #e74c3c;
+    --success: #2ecc71;
+    --text: #f5f6f8;
+    --text-muted: #9ba1a6;
   }
-  .item-action-btn, .worker-action-btn {
-    background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 12px; color: #e0e0e0;
+
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { background: var(--bg); color: var(--text); padding-bottom: 40px; }
+
+  .header {
+    background: #1c1d1f; padding: 14px 20px; border-bottom: 1px solid var(--card-border);
+    display: flex; justify-content: space-between; align-items: center;
   }
-  .item-action-btn:hover, .worker-action-btn:hover { background: rgba(255, 255, 255, 0.2); }
-  .btn-del:hover { background: #e74c3c !important; color: #fff !important; }
-  .add-item-tile, .add-worker-tile {
-    background: rgba(255, 255, 255, 0.05); border: 2px dashed rgba(255, 255, 255, 0.2);
-    color: #aaa; border-radius: 8px; padding: 16px; cursor: pointer; font-weight: 500;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
+  .brand { font-size: 16px; font-weight: bold; color: #fff; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--orange); }
+  .clock { font-family: monospace; font-size: 16px; color: #ffb84d; }
+
+  .worker-bar {
+    background: #272a2e; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--orange);
   }
-  .active-jobs-container { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
-  .selector-row { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
-  .selector-btn {
-    flex: 1; min-width: 70px; padding: 12px 6px; background: #2b2d30; border: 1px solid #444;
-    color: #fff; font-size: 14px; font-weight: bold; border-radius: 8px; cursor: pointer; text-align: center;
+  .btn-ghost {
+    background: transparent; border: 1px solid #555; color: #ccc; padding: 6px 12px; border-radius: 6px; cursor: pointer;
   }
-  .selector-btn.active { background: #ff6a13; border-color: #ff6a13; color: #111; }
-  .count-custom-input { width: 65px; text-align: center; background: #2b2d30; border: 1px solid #444; color: #fff; border-radius: 8px; font-size: 15px; }
+  .btn-ghost:hover { background: #333; color: #fff; }
+
+  .main { max-width: 650px; margin: 0 auto; padding: 20px 16px; }
+
+  .section-label { font-size: 12px; text-transform: uppercase; color: var(--text-muted); font-weight: bold; margin: 18px 0 8px 0; }
+
+  /* Grid & Kutular */
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .tile, .worker-tile {
+    background: var(--card); border: 1px solid var(--card-border); border-radius: 8px; padding: 14px 10px;
+    text-align: center; cursor: pointer; transition: 0.15s; position: relative;
+  }
+  .tile:hover, .worker-tile:hover { border-color: var(--orange); }
+  .tile.active-orange { background: rgba(255, 106, 19, 0.15); border-color: var(--orange); color: #fff; font-weight: bold; }
+  .tile.active-yellow { background: rgba(241, 196, 15, 0.15); border-color: #f1c40f; color: #fff; font-weight: bold; }
+  
+  .worker-avatar {
+    width: 44px; height: 44px; border-radius: 50%; background: #3a3d42; margin: 0 auto 8px;
+    display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; color: var(--orange);
+  }
+  .worker-name { font-weight: bold; font-size: 14px; }
+  .worker-id { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  .add-btn-tile {
+    background: rgba(255,255,255,0.03); border: 2px dashed #444; border-radius: 8px;
+    padding: 14px 10px; display: flex; align-items: center; justify-content: center;
+    color: #888; cursor: pointer; font-size: 13px; font-weight: 500;
+  }
+  .add-btn-tile:hover { border-color: #aaa; color: #fff; }
+
+  /* Butonlar */
+  .btn-start {
+    width: 100%; padding: 16px; background: var(--orange); border: none; border-radius: 8px;
+    font-size: 16px; font-weight: bold; color: #111; cursor: pointer; margin-top: 10px;
+  }
+  .btn-start:hover { background: var(--orange-hover); }
+  .btn-start:disabled { background: #444; color: #777; cursor: not-allowed; }
+
+  .btn-danger {
+    width: 100%; padding: 14px; background: var(--danger); border: none; border-radius: 8px;
+    font-size: 15px; font-weight: bold; color: #fff; cursor: pointer;
+  }
+
+  /* Aktif Kart */
+  .active-card {
+    background: #25282c; border-left: 4px solid var(--orange); border-radius: 8px; padding: 16px; margin-bottom: 15px;
+  }
+  .active-tag { font-size: 12px; color: var(--orange); font-weight: bold; margin-bottom: 4px; }
+  .active-title { font-size: 17px; font-weight: bold; margin-bottom: 8px; }
+  .timer { font-family: monospace; font-size: 26px; font-weight: bold; color: #ffb84d; margin-bottom: 12px; }
+
+  /* Tamamlanan Liste */
   .history-row {
-    display: flex; justify-content: space-between; align-items: center; gap: 10px;
-    padding: 10px 14px; background: #232528; border-radius: 8px; margin-bottom: 8px;
+    background: var(--card); border: 1px solid var(--card-border); border-radius: 8px;
+    padding: 12px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px;
   }
-  .history-actions { display: flex; gap: 6px; align-items: center; }
+  .history-title { font-weight: 600; font-size: 14px; color: #fff; }
+  .history-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+  .history-right { display: flex; align-items: center; gap: 8px; }
+  .btn-action {
+    background: #33363b; border: 1px solid #444; border-radius: 6px; padding: 6px 8px;
+    cursor: pointer; font-size: 13px; color: #eee; transition: 0.15s;
+  }
+  .btn-action:hover { background: #44484f; }
+  .btn-action.del:hover { background: var(--danger); border-color: var(--danger); }
+
+  /* Seçiciler */
+  .selector-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .selector-btn {
+    flex: 1; min-width: 65px; padding: 12px 6px; background: #282a2d; border: 1px solid #444;
+    color: #fff; font-weight: bold; font-size: 13px; border-radius: 6px; cursor: pointer; text-align: center;
+  }
+  .selector-btn.active { background: var(--orange); border-color: var(--orange); color: #111; }
+  .custom-input {
+    width: 60px; text-align: center; background: #282a2d; border: 1px solid #444; color: #fff;
+    border-radius: 6px; font-size: 14px;
+  }
+
+  /* Modal */
   .modal-overlay {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.75);
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8);
     display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px;
   }
   .modal-overlay[hidden], [hidden] { display: none !important; }
   .modal-card {
-    background: #1c1d1f; border: 1px solid #333; border-radius: 12px; width: 100%; max-width: 450px; padding: 20px;
+    background: #1f2124; border: 1px solid #3d4147; border-radius: 10px; width: 100%; max-width: 420px; padding: 20px;
+  }
+  textarea {
+    width: 100%; background: #282a2d; border: 1px solid #444; border-radius: 6px;
+    padding: 10px; color: #fff; resize: vertical; min-height: 70px;
   }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
-<div id="app" class="app">
-  <header class="header">
-    <div class="header-top">
-      <div class="brand"><span class="dot"></span>Kambeton &middot; Zaman Etüdü</div>
-      <div class="clock" id="clock">--:--:--</div>
-    </div>
-    <div class="worker-bar" id="workerBar" hidden>
-      <div class="worker-info">
-        <span id="workerName" style="font-weight:bold; color:var(--orange);"></span>
-        <span class="muted">&middot; Sicil <span id="workerId"></span></span>
-      </div>
-      <button class="btn-ghost" id="logoutBtn">Çıkış Yap</button>
-    </div>
-  </header>
-  <div class="hazard-strip"></div>
-  <div id="errorBar" class="error-bar" hidden></div>
+<header class="header">
+  <div class="brand"><span class="dot"></span>KAMBETON &middot; Zaman Etüdü</div>
+  <div class="clock" id="clock">--:--:--</div>
+</header>
 
-  <main class="main">
-    <!-- 1. GÖZLEMCİ SEÇİMİ -->
-    <section id="screenWorkerSelect" class="screen">
-      <div class="section-label">Etüt Sorumlusu / Gözlemci Seç</div>
-      <div class="tile-grid" id="workerGrid"></div>
-
-      <div id="addWorkerForm" class="panel" hidden>
-        <div class="panel-head">
-          <span>Yeni Sorumlu Ekle</span>
-          <button class="btn-icon" id="closeAddWorker">&times;</button>
-        </div>
-        <div class="form-row">
-          <input id="newWorkerId" placeholder="Sicil No" />
-          <input id="newWorkerName" placeholder="Ad Soyad" />
-          <button class="btn-primary" id="submitAddWorker">Ekle</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- 2. ANA PANEL -->
-    <section id="screenDashboard" class="screen" hidden>
-      <div id="activeJobsList" class="active-jobs-container"></div>
-      <button class="btn-start" id="startJobBtn">YENİ İŞLEM BAŞLAT</button>
-
-      <div id="historyBlock" hidden>
-        <div class="section-label">Bu Sorumlunun Tamamlanan İşlemleri</div>
-        <div id="historyList" class="list-col"></div>
-      </div>
-
-      <div style="margin-top:20px; display:flex; flex-direction:column; gap:10px;">
-        <button class="btn-ghost" id="exportBtn">SADECE BU SORUMLUNUN ETÜDÜNÜ İNDİR (EXCEL)</button>
-        <button class="btn-ghost" id="clearMyDataBtn" style="color:#e74c3c; border-color:#e74c3c;">Bu Sorumlunun Kayıtlarını Temizle</button>
-      </div>
-    </section>
-
-    <!-- 3. İŞLEM BAŞLAT -->
-    <section id="screenStart" class="screen" hidden>
-      <button class="btn-back" id="startBack">&larr; Vazgeç</button>
-
-      <div class="section-label">1. Faaliyet Türü</div>
-      <div class="selector-row" id="activitySelector">
-        <button type="button" class="selector-btn active" data-val="İŞLEM">İŞLEM</button>
-        <button type="button" class="selector-btn" data-val="TAŞIMA">TAŞIMA</button>
-        <button type="button" class="selector-btn" data-val="BEKLEME">BEKLEME</button>
-        <button type="button" class="selector-btn" data-val="HAZIRLIK">HAZIRLIK</button>
-      </div>
-
-      <div class="section-label">2. İşlem Adı</div>
-      <div class="tile-grid" id="jobTypeGrid"></div>
-
-      <div class="section-label">3. İstasyon / Hat</div>
-      <div class="tile-grid" id="stationGrid"></div>
-
-      <div class="section-label">4. Kişi Sayısı</div>
-      <div class="selector-row" id="workerCountSelector">
-        <button type="button" class="selector-btn" data-count="1">1</button>
-        <button type="button" class="selector-btn active" data-count="2">2</button>
-        <button type="button" class="selector-btn" data-count="3">3</button>
-        <button type="button" class="selector-btn" data-count="4">4</button>
-        <button type="button" class="selector-btn" data-count="5">5</button>
-        <input type="number" id="customWorkerCount" class="count-custom-input" min="1" max="50" placeholder="Diğer" />
-      </div>
-
-      <button class="btn-start btn-block" id="confirmStartBtn" disabled>İŞLEMİ BAŞLAT</button>
-    </section>
-
-    <!-- 4. İŞLEM BİTİR -->
-    <section id="screenEnd" class="screen" hidden>
-      <button class="btn-back" id="endBack">&larr; Vazgeç</button>
-      <div class="panel">
-        <div class="active-title" id="endJobType"></div>
-        <div class="active-meta"><span id="endMeta"></span></div>
-        <div class="timer" id="endTimer">00:00:00</div>
-      </div>
-      <div class="section-label">İş Durması / Gecikme Nedeni</div>
-      <textarea id="endStopReason" placeholder="Varsa gecikme nedeni..."></textarea>
-      <button class="btn-danger btn-block" id="confirmEndBtn">İŞLEMİ BİTİR</button>
-    </section>
-  </main>
+<div class="worker-bar" id="workerBar" hidden>
+  <div>
+    <span id="displayWorkerName" style="font-weight:bold; color:var(--orange);"></span>
+    <span style="font-size:12px; color:var(--text-muted); margin-left:6px;">(Sicil: <span id="displayWorkerId"></span>)</span>
+  </div>
+  <button class="btn-ghost" id="logoutBtn">Çıkış Yap</button>
 </div>
 
-<!-- DÜZENLEME MODALI -->
-<div id="editLogModal" class="modal-overlay" hidden>
+<main class="main">
+
+  <!-- 1. GÖZLEMCİ SEÇİM EKRANI -->
+  <section id="screenWorkers">
+    <div class="section-label">Etüt Sorumlusu / Gözlemci Seç</div>
+    <div class="tile-grid" id="workerGrid"></div>
+
+    <div id="addWorkerCard" style="background:#202225; padding:15px; border-radius:8px; border:1px solid #333; margin-top:15px;" hidden>
+      <div style="font-size:13px; font-weight:bold; margin-bottom:10px;">Yeni Sorumlu Kaydet</div>
+      <div style="display:flex; gap:8px;">
+        <input id="newWId" placeholder="Sicil No" style="flex:1; padding:10px; background:#282a2d; border:1px solid #444; border-radius:6px; color:#fff;" />
+        <input id="newWName" placeholder="Ad Soyad" style="flex:2; padding:10px; background:#282a2d; border:1px solid #444; border-radius:6px; color:#fff;" />
+        <button id="btnSaveWorker" style="background:var(--orange); border:none; padding:10px 14px; border-radius:6px; font-weight:bold; cursor:pointer;">Ekle</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. ANA PANEL (DASHBOARD) -->
+  <section id="screenDashboard" hidden>
+    <div id="activeBox"></div>
+
+    <button class="btn-start" id="btnOpenStartScreen">+ YENİ İŞLEM BAŞLAT</button>
+
+    <div id="historyContainer" style="margin-top:25px;" hidden>
+      <div class="section-label">Bu Gözlemcinin Tamamladığı İşlemler</div>
+      <div id="historyList"></div>
+    </div>
+
+    <div style="margin-top:30px; display:flex; flex-direction:column; gap:10px;">
+      <button class="btn-ghost" id="btnExportExcel" style="padding:14px; border-color:var(--orange); color:#fff; font-weight:bold;">
+        📥 SADECE BU ETÜDÜ EXCEL'E AKTAR
+      </button>
+      <button class="btn-ghost" id="btnClearMyEtud" style="padding:10px; border-color:var(--danger); color:var(--danger); font-size:12px;">
+        🗑️ Bu Gözlemcinin Kayıtlarını Sıfırla (Yeni Etüde Başla)
+      </button>
+    </div>
+  </section>
+
+  <!-- 3. İŞLEM BAŞLATMA FORMU -->
+  <section id="screenStart" hidden>
+    <button class="btn-ghost" id="btnCancelStart" style="margin-bottom:15px;">&larr; Vazgeç</button>
+
+    <div class="section-label">1. Faaliyet Türü</div>
+    <div class="selector-row" id="activitySelector">
+      <button class="selector-btn active" data-v="İŞLEM">İŞLEM</button>
+      <button class="selector-btn" data-v="TAŞIMA">TAŞIMA</button>
+      <button class="selector-btn" data-v="BEKLEME">BEKLEME</button>
+      <button class="selector-btn" data-v="HAZIRLIK">HAZIRLIK</button>
+    </div>
+
+    <div class="section-label">2. İşlem Adı Seç</div>
+    <div class="tile-grid" id="jobGrid"></div>
+
+    <div class="section-label">3. İstasyon / Hat Seç</div>
+    <div class="tile-grid" id="stationGrid"></div>
+
+    <div class="section-label">4. Kişi Sayısı</div>
+    <div class="selector-row" id="workerCountSelector">
+      <button class="selector-btn" data-c="1">1</button>
+      <button class="selector-btn active" data-c="2">2</button>
+      <button class="selector-btn" data-c="3">3</button>
+      <button class="selector-btn" data-c="4">4</button>
+      <button class="selector-btn" data-c="5">5</button>
+      <input type="number" id="customWCount" class="custom-input" placeholder="Diğer" min="1" max="50" />
+    </div>
+
+    <button class="btn-start" id="btnConfirmStart" disabled>İŞLEMİ BAŞLAT</button>
+  </section>
+
+  <!-- 4. İŞLEM BİTİRME EKRANI -->
+  <section id="screenEnd" hidden>
+    <button class="btn-ghost" id="btnCancelEnd" style="margin-bottom:15px;">&larr; Vazgeç</button>
+    <div class="active-card">
+      <div class="active-title" id="endTitleDisplay"></div>
+      <div class="timer" id="endTimerDisplay">00:00:00</div>
+    </div>
+    <div class="section-label">Duruş / Gecikme Nedeni (Varsa)</div>
+    <textarea id="endStopReasonInput" placeholder="Örn: Vinç arızası / Malzeme bekleme (Yoksa boş bırakın)"></textarea>
+    <button class="btn-danger" id="btnConfirmEnd" style="margin-top:15px;">İŞLEMİ BİTİR</button>
+  </section>
+
+</main>
+
+<!-- 5. DÜZENLEME MODALI (✏️) -->
+<div id="editModal" class="modal-overlay" hidden>
   <div class="modal-card">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-      <span id="modalJobTitle" style="font-weight:bold; color:var(--orange);">İşlemi Düzenle</span>
-      <button class="btn-icon" id="closeEditModal" style="background:none; border:none; color:#fff; font-size:20px; cursor:pointer;">&times;</button>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+      <span style="font-weight:bold; color:var(--orange);" id="editModalTitle">İşlemi Düzenle</span>
+      <button class="btn-action" id="btnCloseEditModal">&times;</button>
     </div>
     <div class="section-label">Kişi Sayısı</div>
-    <input type="number" id="modalWorkerCount" class="count-custom-input" style="width:100%; height:38px; margin-bottom:12px; text-align:left; padding-left:10px;" min="1" max="50" />
+    <input type="number" id="editWorkerCountInput" style="width:100%; padding:10px; background:#282a2d; border:1px solid #444; border-radius:6px; color:#fff; margin-bottom:12px;" min="1" max="50" />
     <div class="section-label">Duruş / Gecikme Nedeni</div>
-    <textarea id="modalStopReason" style="margin-bottom:15px; width:100%;"></textarea>
+    <textarea id="editStopReasonInput" style="margin-bottom:15px;"></textarea>
     <div style="display:flex; gap:10px;">
-      <button class="btn-ghost" id="cancelEditModal" style="flex:1;">İptal</button>
-      <button class="btn-primary" id="saveEditModal" style="flex:1;">Kaydet</button>
+      <button class="btn-ghost" id="btnCancelEdit" style="flex:1;">İptal</button>
+      <button class="btn-start" id="btnSaveEdit" style="flex:1; padding:10px; margin:0; font-size:14px;">Kaydet</button>
     </div>
   </div>
 </div>
 
 <script>
-const LS = {
-  workers: "ist_workers_v3",
-  jobTypes: "ist_jobtypes_v3",
-  stations: "ist_stations_v3",
-  logs: "ist_logs_v3"
+// --- LOCAL STORAGE YÖNETİMİ ---
+const STORE_KEYS = {
+  workers: "kb_final_workers",
+  jobs: "kb_final_jobs",
+  stations: "kb_final_stations",
+  logs: "kb_final_logs"
 };
 
-function loadLS(k, fb) { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : fb; } catch(e) { return fb; } }
-function saveLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} }
+function getStorage(key, def) {
+  try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : def; } catch(e) { return def; }
+}
+function setStorage(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {}
+}
 
-let state = {
-  worker: null,
+let appState = {
+  currentWorker: null,
   workers: [],
-  jobTypes: [],
-  stations: [],
-  logs: [],
-  activeLogs: [],
-  endingLog: null,
-  editingLogId: null,
-  selJobType: null,
-  selStation: null,
+  jobs: ["Halat kesimi", "Kalıp temizliği", "Yağlama", "Demir atma", "Halat bağlama", "Cıvata ve tayrot sıkılması", "Beton dökme", "Vinç ile taşıma", "Söküm"],
+  stations: ["Hat 1", "Hat 2", "Köprü Hattı", "Kalıp Sahası"],
+  logs: [], // Bütün kayıtlar
+  activeJob: null,
+  endingJob: null,
+  editingJobId: null,
   selActivity: "İŞLEM",
-  workerCount: 2
+  selJob: null,
+  selStation: null,
+  selCount: 2
 };
 
 const el = (id) => document.getElementById(id);
 const fmtTime = (iso) => iso ? new Date(iso).toLocaleTimeString("tr-TR", {hour:"2-digit", minute:"2-digit"}) : "--:--";
 const fmtDuration = (ms) => {
-  const s = Math.max(0, Math.floor(ms/1000));
-  return [Math.floor(s/3600), Math.floor((s%3600)/60), s%60].map(v => String(v).padStart(2,"0")).join(":");
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map(v => String(v).padStart(2, "0")).join(":");
 };
 
-function showScreen(name) {
-  ["screenWorkerSelect", "screenDashboard", "screenStart", "screenEnd"].forEach(id => {
-    const d = el(id); if (d) d.hidden = (id !== name);
+function showScreen(screenId) {
+  ["screenWorkers", "screenDashboard", "screenStart", "screenEnd"].forEach(id => {
+    el(id).hidden = (id !== screenId);
   });
 }
 
-function renderWorkerGrid() {
+// 1. SORUMLU LİSTESİ
+function renderWorkers() {
   const grid = el("workerGrid");
   grid.innerHTML = "";
-  state.workers.forEach(w => {
-    const d = document.createElement("div");
-    d.className = "worker-tile";
-    d.innerHTML = `<div class="worker-avatar">${w.name.slice(0,2).toUpperCase()}</div><div class="worker-tile-name">${w.name}</div><div class="worker-tile-id">Sicil ${w.id}</div>`;
-    d.onclick = () => selectWorker(w);
-    grid.appendChild(d);
+  appState.workers.forEach(w => {
+    const tile = document.createElement("div");
+    tile.className = "worker-tile";
+    tile.innerHTML = `
+      <div class="worker-avatar">${w.name.slice(0, 2).toUpperCase()}</div>
+      <div class="worker-name">${w.name}</div>
+      <div class="worker-id">Sicil: ${w.id}</div>
+    `;
+    tile.onclick = () => selectWorker(w);
+    grid.appendChild(tile);
   });
-  const addBtn = document.createElement("button");
-  addBtn.className = "add-worker-tile";
-  addBtn.innerHTML = `+ Sorumlu Ekle`;
-  addBtn.onclick = () => el("addWorkerForm").hidden = false;
-  grid.appendChild(addBtn);
+
+  const addTile = document.createElement("div");
+  addTile.className = "add-btn-tile";
+  addTile.textContent = "+ Sorumlu Ekle";
+  addTile.onclick = () => { el("addWorkerCard").hidden = false; };
+  grid.appendChild(addTile);
 }
 
 function selectWorker(w) {
-  state.worker = w;
+  appState.currentWorker = w;
+  el("displayWorkerName").textContent = w.name;
+  el("displayWorkerId").textContent = w.id;
   el("workerBar").hidden = false;
-  el("workerName").textContent = w.name;
-  el("workerId").textContent = w.id;
   showScreen("screenDashboard");
   refreshDashboard();
 }
 
 el("logoutBtn").onclick = () => {
-  state.worker = null;
+  appState.currentWorker = null;
   el("workerBar").hidden = true;
-  showScreen("screenWorkerSelect");
+  showScreen("screenWorkers");
 };
 
-function refreshDashboard() {
-  if (!state.worker) return;
-  const wid = state.worker.id;
-  state.activeLogs = state.logs.filter(l => l.worker_id === wid && l.status === "active");
+el("btnSaveWorker").onclick = () => {
+  const id = el("newWId").value.trim();
+  const name = el("newWName").value.trim();
+  if (!id || !name) return;
+  appState.workers.push({ id, name });
+  setStorage(STORE_KEYS.workers, appState.workers);
+  el("newWId").value = ""; el("newWName").value = "";
+  el("addWorkerCard").hidden = true;
+  renderWorkers();
+};
 
-  const container = el("activeJobsList");
-  container.innerHTML = "";
-  state.activeLogs.forEach(log => {
-    const c = document.createElement("div");
-    c.className = "active-card";
-    c.innerHTML = `
-      <div class="active-tag">${log.activity} &middot; ${log.worker_count} Kişi</div>
-      <div class="active-title">${log.job_type}</div>
-      <div class="timer" id="timer-${log.id}">00:00:00</div>
-      <button class="btn-danger btn-block" style="margin-top:10px;">İŞLEMİ BİTİR</button>
+// 2. DASHBOARD VE LİSTELEME
+function refreshDashboard() {
+  if (!appState.currentWorker) return;
+  const wid = appState.currentWorker.id;
+
+  // Aktif devam eden iş
+  const activeBox = el("activeBox");
+  activeBox.innerHTML = "";
+  if (appState.activeJob && appState.activeJob.worker_id === wid) {
+    const card = document.createElement("div");
+    card.className = "active-card";
+    card.innerHTML = `
+      <div class="active-tag">${appState.activeJob.activity} &middot; ${appState.activeJob.worker_count} Kişi</div>
+      <div class="active-title">${appState.activeJob.job_type} (${appState.activeJob.station})</div>
+      <div class="timer" id="liveTimer">00:00:00</div>
+      <button class="btn-danger" id="btnFinishJob">İŞLEMİ BİTİR</button>
     `;
-    c.querySelector("button").onclick = () => {
-      state.endingLog = log;
-      el("endJobType").textContent = log.job_type;
-      el("endMeta").textContent = `${log.station} \u00b7 ${log.worker_count} Kişi`;
-      el("endStopReason").value = "";
+    card.querySelector("#btnFinishJob").onclick = () => {
+      appState.endingJob = appState.activeJob;
+      el("endTitleDisplay").textContent = `[${appState.endingJob.activity}] ${appState.endingJob.job_type}`;
+      el("endStopReasonInput").value = "";
       showScreen("screenEnd");
     };
-    container.appendChild(c);
-  });
+    activeBox.appendChild(card);
+  }
 
-  // TAMAMLANAN İŞLER LİSTESİ (✏️ DÜZENLE VE 🗑️ SİL BUTONLARIYLA)
-  const myHistory = state.logs.filter(l => l.worker_id === wid && l.status === "done").reverse();
-  const histBlock = el("historyBlock");
+  // YALNIZCA BU KİŞİNİN BİTMİŞ İŞLERİ
+  const myDoneLogs = appState.logs.filter(l => l.worker_id === wid && l.status === "done").reverse();
+  const histContainer = el("historyContainer");
   const histList = el("historyList");
-  if (myHistory.length > 0) {
-    histBlock.hidden = false;
+
+  if (myDoneLogs.length > 0) {
+    histContainer.hidden = false;
     histList.innerHTML = "";
-    myHistory.forEach(l => {
-      const dur = Math.round((new Date(l.end_time) - new Date(l.start_time)) / 60000);
+    myDoneLogs.forEach(log => {
+      const dur = Math.round((new Date(log.end_time) - new Date(log.start_time)) / 60000);
       const row = document.createElement("div");
       row.className = "history-row";
       row.innerHTML = `
         <div>
-          <div style="font-weight:bold; color:#fff;">[${l.activity}] ${l.job_type}</div>
-          <div style="font-size:12px; color:#aaa;">${l.station} &middot; ${l.worker_count} Kişi &middot; ${dur} dk ${l.stop_reason ? `<span style="color:#f39c12;">&middot; Duruş: ${l.stop_reason}</span>` : ""}</div>
+          <div class="history-title">[${log.activity}] ${log.job_type}</div>
+          <div class="history-sub">${log.station} &middot; ${log.worker_count} Kişi &middot; ${dur} dk ${log.stop_reason ? `<span style="color:#f39c12;">&middot; ${log.stop_reason}</span>` : ""}</div>
         </div>
-        <div class="history-actions">
-          <span style="font-size:12px; color:#2ecc71; margin-right:4px;">Tamamlandı</span>
-          <button class="item-action-btn btn-edit" title="Düzenle">✏️</button>
-          <button class="item-action-btn btn-del" title="Sil">🗑️</button>
+        <div class="history-right">
+          <button class="btn-action btn-edit" title="Düzenle">✏️</button>
+          <button class="btn-action btn-del del" title="Sil">🗑️</button>
         </div>
       `;
 
-      // ✏️ Düzenle Butonu
+      // ✏️ DÜZENLEME TIKLAMASI
       row.querySelector(".btn-edit").onclick = () => {
-        state.editingLogId = l.id;
-        el("modalJobTitle").textContent = `[${l.activity}] ${l.job_type}`;
-        el("modalWorkerCount").value = l.worker_count;
-        el("modalStopReason").value = l.stop_reason || "";
-        el("editLogModal").hidden = false;
+        appState.editingJobId = log.id;
+        el("editModalTitle").textContent = `Düzenle: ${log.job_type}`;
+        el("editWorkerCountInput").value = log.worker_count;
+        el("editStopReasonInput").value = log.stop_reason || "";
+        el("editModal").hidden = false;
       };
 
-      // 🗑️ Sil Butonu
+      // 🗑️ SİLME TIKLAMASI
       row.querySelector(".btn-del").onclick = () => {
-        if (confirm(`"${l.job_type}" işlemini silmek istediğinize emin misiniz?`)) {
-          state.logs = state.logs.filter(x => x.id !== l.id);
-          saveLS(LS.logs, state.logs);
+        if (confirm(`"${log.job_type}" kaydını silmek istediğinize emin misiniz?`)) {
+          appState.logs = appState.logs.filter(l => l.id !== log.id);
+          setStorage(STORE_KEYS.logs, appState.logs);
           refreshDashboard();
         }
       };
@@ -307,156 +410,81 @@ function refreshDashboard() {
       histList.appendChild(row);
     });
   } else {
-    histBlock.hidden = true;
+    histContainer.hidden = true;
   }
 }
 
-// Modal Kapatma ve Kaydetme
+// 3. MODAL YÖNETİMİ
 function closeEditModal() {
-  state.editingLogId = null;
-  el("editLogModal").hidden = true;
+  appState.editingJobId = null;
+  el("editModal").hidden = true;
 }
-el("closeEditModal").onclick = closeEditModal;
-el("cancelEditModal").onclick = closeEditModal;
+el("btnCloseEditModal").onclick = closeEditModal;
+el("btnCancelEdit").onclick = closeEditModal;
 
-el("saveEditModal").onclick = () => {
-  if (!state.editingLogId) return;
-  const target = state.logs.find(l => l.id === state.editingLogId);
+el("btnSaveEdit").onclick = () => {
+  if (!appState.editingJobId) return;
+  const target = appState.logs.find(l => l.id === appState.editingJobId);
   if (target) {
-    target.worker_count = parseInt(el("modalWorkerCount").value) || 1;
-    target.stop_reason = el("modalStopReason").value.trim();
-    saveLS(LS.logs, state.logs);
+    target.worker_count = parseInt(el("editWorkerCountInput").value) || 1;
+    target.stop_reason = el("editStopReasonInput").value.trim();
+    setStorage(STORE_KEYS.logs, appState.logs);
   }
   closeEditModal();
   refreshDashboard();
 };
 
-// SADECE GİRİŞ YAPAN KİŞİNİN EXCEL ÇIKTISI
-el("exportBtn").onclick = () => {
-  if (!state.worker) return;
-  const wid = state.worker.id;
-  
-  const targetLogs = state.logs.filter(l => l.worker_id === wid && l.status === "done");
-  if (targetLogs.length === 0) {
-    alert(`${state.worker.name} adına kayıt bulunamadı.`);
-    return;
-  }
-
-  const baseTime = new Date(targetLogs[0].start_time).getTime();
-
-  const wsData = [
-    ["KAMBETON A.Ş. - ZAMAN ETÜDÜ FORMU"],
-    ["Gözlemci:", state.worker.name, "", "Tarih:", new Date().toLocaleDateString("tr-TR")],
-    [],
-    ["İŞLEM NO", "İŞLEM ADI", "FAALİYET", "BAŞLANGIÇ SAATİ", "BAŞLAMA", "BİTİŞ SAATİ", "BİTİŞ", "SÜRE (dk)", "KİŞİ", "ADAM SAAT", "DURUŞ NEDENİ"]
-  ];
-
-  let sumIslem = 0, sumTasima = 0, sumBekleme = 0, sumHazirlik = 0, sumAdamSaat = 0;
-
-  targetLogs.forEach((l, idx) => {
-    const sMs = new Date(l.start_time).getTime();
-    const eMs = new Date(l.end_time).getTime();
-    const baslama = Math.max(0, Math.round((sMs - baseTime) / 60000));
-    const bitis = Math.max(0, Math.round((eMs - baseTime) / 60000));
-    const sure = Math.max(0, Math.round((eMs - sMs) / 60000));
-    const as = Number(((sure * l.worker_count) / 60).toFixed(2));
-
-    if (l.activity === "İŞLEM") sumIslem += sure;
-    else if (l.activity === "TAŞIMA") sumTasima += sure;
-    else if (l.activity === "BEKLEME") sumBekleme += sure;
-    else if (l.activity === "HAZIRLIK") sumHazirlik += sure;
-    sumAdamSaat += as;
-
-    wsData.push([
-      idx + 1, l.job_type, l.activity, fmtTime(l.start_time), baslama, fmtTime(l.end_time), bitis, sure, l.worker_count, as, l.stop_reason || "-"
-    ]);
-  });
-
-  wsData.push([]);
-  wsData.push(["FAALİYET", "SÜRE (DK)", "", "ÖZET", "DEĞER"]);
-  wsData.push(["İŞLEM", sumIslem, "", "TOPLAM İŞLEM", sumIslem]);
-  wsData.push(["TAŞIMA", sumTasima, "", "TOPLAM TAŞIMA", sumTasima]);
-  wsData.push(["BEKLEME", sumBekleme, "", "TOPLAM BEKLEME", sumBekleme]);
-  wsData.push(["HAZIRLIK", sumHazirlik, "", "TOPLAM HAZIRLIK", sumHazirlik]);
-  wsData.push(["", "", "", "TOPLAM ADAM SAAT", Number(sumAdamSaat.toFixed(2))]);
-
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Etut");
-  
-  XLSX.writeFile(wb, `Kambeton_${state.worker.name}_Etudu.xlsx`);
-};
-
-el("clearMyDataBtn").onclick = () => {
-  if (confirm(`${state.worker.name} adına ait tüm kayıtlar silinsin mi?`)) {
-    state.logs = state.logs.filter(l => l.worker_id !== state.worker.id);
-    saveLS(LS.logs, state.logs);
-    refreshDashboard();
-  }
-};
-
-// Sorumlu Ekleme
-el("submitAddWorker").onclick = () => {
-  const id = el("newWorkerId").value.trim(), name = el("newWorkerName").value.trim();
-  if (!id || !name) return;
-  state.workers.push({ id, name });
-  saveLS(LS.workers, state.workers);
-  el("newWorkerId").value = ""; el("newWorkerName").value = "";
-  el("addWorkerForm").hidden = true;
-  renderWorkerGrid();
-};
-el("closeAddWorker").onclick = () => el("addWorkerForm").hidden = true;
-
-// İşlem Başlatma Akışı
-el("startJobBtn").onclick = () => {
-  state.selJobType = null; state.selStation = null;
-  renderStartFlow();
+// 4. BAŞLATMA AKIŞI
+el("btnOpenStartScreen").onclick = () => {
+  appState.selJob = null;
+  appState.selStation = null;
+  renderStartGrid();
   showScreen("screenStart");
 };
-el("startBack").onclick = () => showScreen("screenDashboard");
-el("endBack").onclick = () => showScreen("screenDashboard");
+el("btnCancelStart").onclick = () => showScreen("screenDashboard");
+el("btnCancelEnd").onclick = () => showScreen("screenDashboard");
 
-function renderStartFlow() {
-  const jg = el("jobTypeGrid"); jg.innerHTML = "";
-  state.jobTypes.forEach(jt => {
+function renderStartGrid() {
+  const jg = el("jobGrid"); jg.innerHTML = "";
+  appState.jobs.forEach(j => {
     const t = document.createElement("div");
-    t.className = "tile" + (state.selJobType === jt.name ? " active-orange" : "");
-    t.innerHTML = `<span>${jt.name}</span>`;
-    t.onclick = () => { state.selJobType = jt.name; renderStartFlow(); };
+    t.className = "tile" + (appState.selJob === j ? " active-orange" : "");
+    t.textContent = j;
+    t.onclick = () => { appState.selJob = j; renderStartGrid(); };
     jg.appendChild(t);
   });
-  const addJt = document.createElement("div");
-  addJt.className = "add-item-tile"; addJt.textContent = "+ İşlem Ekle";
-  addJt.onclick = () => {
-    const n = prompt("Yeni İşlem:");
-    if (n) { state.jobTypes.push({id: Date.now(), name: n.trim()}); saveLS(LS.jobTypes, state.jobTypes); renderStartFlow(); }
+  const addJ = document.createElement("div");
+  addJ.className = "add-btn-tile"; addJ.textContent = "+ İşlem Ekle";
+  addJ.onclick = () => {
+    const n = prompt("Yeni İşlem Adı:");
+    if (n && n.trim()) { appState.jobs.push(n.trim()); setStorage(STORE_KEYS.jobs, appState.jobs); renderStartGrid(); }
   };
-  jg.appendChild(addJt);
+  jg.appendChild(addJ);
 
   const sg = el("stationGrid"); sg.innerHTML = "";
-  state.stations.forEach(st => {
+  appState.stations.forEach(s => {
     const t = document.createElement("div");
-    t.className = "tile" + (state.selStation === st.name ? " active-yellow" : "");
-    t.innerHTML = `<span>${st.name}</span>`;
-    t.onclick = () => { state.selStation = st.name; renderStartFlow(); };
+    t.className = "tile" + (appState.selStation === s ? " active-yellow" : "");
+    t.textContent = s;
+    t.onclick = () => { appState.selStation = s; renderStartGrid(); };
     sg.appendChild(t);
   });
-  const addSt = document.createElement("div");
-  addSt.className = "add-item-tile"; addSt.textContent = "+ Hat/İstasyon Ekle";
-  addSt.onclick = () => {
-    const n = prompt("Yeni İstasyon:");
-    if (n) { state.stations.push({id: Date.now(), name: n.trim()}); saveLS(LS.stations, state.stations); renderStartFlow(); }
+  const addS = document.createElement("div");
+  addS.className = "add-btn-tile"; addS.textContent = "+ Hat Ekle";
+  addS.onclick = () => {
+    const n = prompt("Yeni Hat / İstasyon Adı:");
+    if (n && n.trim()) { appState.stations.push(n.trim()); setStorage(STORE_KEYS.stations, appState.stations); renderStartGrid(); }
   };
-  sg.appendChild(addSt);
+  sg.appendChild(addS);
 
-  el("confirmStartBtn").disabled = !(state.selJobType && state.selStation);
+  el("btnConfirmStart").disabled = !(appState.selJob && appState.selStation);
 }
 
 document.querySelectorAll("#activitySelector .selector-btn").forEach(b => {
   b.onclick = () => {
     document.querySelectorAll("#activitySelector .selector-btn").forEach(x => x.classList.remove("active"));
     b.classList.add("active");
-    state.selActivity = b.getAttribute("data-val");
+    appState.selActivity = b.getAttribute("data-v");
   };
 });
 
@@ -464,57 +492,141 @@ document.querySelectorAll("#workerCountSelector .selector-btn").forEach(b => {
   b.onclick = () => {
     document.querySelectorAll("#workerCountSelector .selector-btn").forEach(x => x.classList.remove("active"));
     b.classList.add("active");
-    state.workerCount = parseInt(b.getAttribute("data-count"));
+    appState.selCount = parseInt(b.getAttribute("data-c"));
+    el("customWCount").value = "";
   };
 });
-
-el("confirmStartBtn").onclick = () => {
-  state.logs.push({
-    id: "log-" + Date.now(),
-    worker_id: state.worker.id,
-    job_type: state.selJobType,
-    activity: state.selActivity,
-    station: state.selStation,
-    worker_count: state.workerCount,
-    start_time: new Date().toISOString(),
-    end_time: null,
-    status: "active"
-  });
-  saveLS(LS.logs, state.logs);
-  showScreen("screenDashboard");
-  refreshDashboard();
-};
-
-el("confirmEndBtn").onclick = () => {
-  const t = state.logs.find(l => l.id === state.endingLog.id);
-  if (t) {
-    t.end_time = new Date().toISOString();
-    t.stop_reason = el("endStopReason").value.trim();
-    t.status = "done";
-    saveLS(LS.logs, state.logs);
+el("customWCount").oninput = (e) => {
+  const v = parseInt(e.target.value);
+  if (v && v > 0) {
+    document.querySelectorAll("#workerCountSelector .selector-btn").forEach(x => x.classList.remove("active"));
+    appState.selCount = v;
   }
+};
+
+el("btnConfirmStart").onclick = () => {
+  appState.activeJob = {
+    id: "job-" + Date.now(),
+    worker_id: appState.currentWorker.id,
+    job_type: appState.selJob,
+    activity: appState.selActivity,
+    station: appState.selStation,
+    worker_count: appState.selCount,
+    start_time: new Date().toISOString()
+  };
   showScreen("screenDashboard");
   refreshDashboard();
 };
 
+el("btnConfirmEnd").onclick = () => {
+  if (!appState.endingJob) return;
+  const finished = {
+    ...appState.endingJob,
+    end_time: new Date().toISOString(),
+    stop_reason: el("endStopReasonInput").value.trim(),
+    status: "done"
+  };
+  appState.logs.push(finished);
+  setStorage(STORE_KEYS.logs, appState.logs);
+  appState.activeJob = null;
+  appState.endingJob = null;
+  showScreen("screenDashboard");
+  refreshDashboard();
+};
+
+// 5. EXCEL ÇIKTISI (TAM İZOLASYON & 0 REFERANSI)
+el("btnExportExcel").onclick = () => {
+  if (!appState.currentWorker) return;
+  const wid = appState.currentWorker.id;
+
+  // YALNIZCA BU KİŞİNİN KAYITLARI
+  const myLogs = appState.logs
+    .filter(l => l.worker_id === wid && l.status === "done")
+    .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+
+  if (myLogs.length === 0) {
+    alert(`${appState.currentWorker.name} adına tamamlanmış bir işlem bulunmuyor.`);
+    return;
+  }
+
+  // İlk işlemin başlangıç saati = 0. dakika
+  const baseTime = new Date(myLogs[0].start_time).getTime();
+
+  const wsData = [
+    ["KAMBETON A.Ş. - ZAMAN ETÜDÜ FORMU"],
+    ["Etüt Sorumlusu:", `${appState.currentWorker.name} (Sicil: ${appState.currentWorker.id})`, "", "Tarih:", new Date().toLocaleDateString("tr-TR")],
+    [],
+    ["İŞLEM NO", "İŞLEM ADI", "FAALİYET", "BAŞLANGIÇ SAATİ", "BAŞLAMA", "BİTİŞ SAATİ", "BİTİŞ", "SÜRE (dk)", "KİŞİ", "ADAM SAAT", "DURUŞ / GECİKME NEDENİ"]
+  ];
+
+  let sumIslem = 0, sumTasima = 0, sumBekleme = 0, sumHazirlik = 0, sumAdamSaat = 0;
+
+  myLogs.forEach((l, idx) => {
+    const sMs = new Date(l.start_time).getTime();
+    const eMs = new Date(l.end_time).getTime();
+    const baslama = Math.max(0, Math.round((sMs - baseTime) / 60000));
+    const bitis = Math.max(0, Math.round((eMs - baseTime) / 60000));
+    const sure = Math.max(0, Math.round((eMs - sMs) / 60000));
+    const adamSaat = Number(((sure * l.worker_count) / 60).toFixed(2));
+
+    if (l.activity === "İŞLEM") sumIslem += sure;
+    else if (l.activity === "TAŞIMA") sumTasima += sure;
+    else if (l.activity === "BEKLEME") sumBekleme += sure;
+    else if (l.activity === "HAZIRLIK") sumHazirlik += sure;
+    sumAdamSaat += adamSaat;
+
+    wsData.push([
+      idx + 1, l.job_type, l.activity, fmtTime(l.start_time), baslama, fmtTime(l.end_time), bitis, sure, l.worker_count, adamSaat, l.stop_reason || "-"
+    ]);
+  });
+
+  wsData.push([]);
+  wsData.push(["FAALİYET", "SÜRE (DK)", "", "ÖZET TABLOSU", "DEĞER"]);
+  wsData.push(["İŞLEM", sumIslem, "", "TOPLAM İŞLEM SÜRESİ", sumIslem]);
+  wsData.push(["TAŞIMA", sumTasima, "", "TOPLAM TAŞIMA SÜRESİ", sumTasima]);
+  wsData.push(["BEKLEME", sumBekleme, "", "TOPLAM BEKLEME SÜRESİ", sumBekleme]);
+  wsData.push(["HAZIRLIK", sumHazirlik, "", "TOPLAM HAZIRLIK SÜRESİ", sumHazirlik]);
+  wsData.push(["", "", "", "TOPLAM ADAM SAAT", Number(sumAdamSaat.toFixed(2))]);
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Etut");
+
+  const cleanName = appState.currentWorker.name.replace(/\s+/g, "_");
+  XLSX.writeFile(wb, `Kambeton_${cleanName}_Etudu.xlsx`);
+};
+
+// Sorumlu bazında sıfırlama
+el("btnClearMyEtud").onclick = () => {
+  if (confirm(`DİKKAT: ${appState.currentWorker.name} adına tutulan mevcut etüt sıfırlanacak. Yeni etüt 0. dakikadan başlayacak.\n\nOnaylıyor musunuz?`)) {
+    appState.logs = appState.logs.filter(l => l.worker_id !== appState.currentWorker.id);
+    setStorage(STORE_KEYS.logs, appState.logs);
+    refreshDashboard();
+  }
+};
+
+// Saat ve canlı sayaç
 setInterval(() => {
   const now = new Date();
   el("clock").textContent = now.toLocaleTimeString("tr-TR");
-  if (!el("screenDashboard").hidden) {
-    state.activeLogs.forEach(l => {
-      const td = document.getElementById("timer-" + l.id);
-      if (td) td.textContent = fmtDuration(now - new Date(l.start_time));
-    });
+  if (appState.activeJob) {
+    const td = document.getElementById("liveTimer");
+    if (td) td.textContent = fmtDuration(now - new Date(appState.activeJob.start_time));
+  }
+  if (appState.endingJob) {
+    const et = document.getElementById("endTimerDisplay");
+    if (et) et.textContent = fmtDuration(now - new Date(appState.endingJob.start_time));
   }
 }, 1000);
 
+// Başlat
 function init() {
-  state.workers = loadLS(LS.workers, []);
-  state.jobTypes = loadLS(LS.jobTypes, []);
-  state.stations = loadLS(LS.stations, []);
-  state.logs = loadLS(LS.logs, []);
-  renderWorkerGrid();
-  showScreen("screenWorkerSelect");
+  appState.workers = getStorage(STORE_KEYS.workers, []);
+  appState.jobs = getStorage(STORE_KEYS.jobs, appState.jobs);
+  appState.stations = getStorage(STORE_KEYS.stations, appState.stations);
+  appState.logs = getStorage(STORE_KEYS.logs, []);
+  renderWorkers();
+  showScreen("screenWorkers");
 }
 init();
 </script>
