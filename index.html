@@ -43,7 +43,6 @@
 
   .section-label { font-size: 12px; text-transform: uppercase; color: var(--text-muted); font-weight: bold; margin: 18px 0 8px 0; }
 
-  /* Grid & Kutular */
   .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 12px; }
   .tile, .worker-tile {
     background: var(--card); border: 1px solid var(--card-border); border-radius: 8px; padding: 14px 10px;
@@ -67,7 +66,6 @@
   }
   .add-btn-tile:hover { border-color: #aaa; color: #fff; }
 
-  /* Butonlar */
   .btn-start {
     width: 100%; padding: 16px; background: var(--orange); border: none; border-radius: 8px;
     font-size: 16px; font-weight: bold; color: #111; cursor: pointer; margin-top: 10px;
@@ -80,7 +78,6 @@
     font-size: 15px; font-weight: bold; color: #fff; cursor: pointer;
   }
 
-  /* Aktif Kart */
   .active-card {
     background: #25282c; border-left: 4px solid var(--orange); border-radius: 8px; padding: 16px; margin-bottom: 15px;
   }
@@ -88,7 +85,6 @@
   .active-title { font-size: 17px; font-weight: bold; margin-bottom: 8px; }
   .timer { font-family: monospace; font-size: 26px; font-weight: bold; color: #ffb84d; margin-bottom: 12px; }
 
-  /* Tamamlanan Liste */
   .history-row {
     background: var(--card); border: 1px solid var(--card-border); border-radius: 8px;
     padding: 12px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px;
@@ -103,7 +99,6 @@
   .btn-action:hover { background: #44484f; }
   .btn-action.del:hover { background: var(--danger); border-color: var(--danger); }
 
-  /* Seçiciler */
   .selector-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
   .selector-btn {
     flex: 1; min-width: 65px; padding: 12px 6px; background: #282a2d; border: 1px solid #444;
@@ -115,7 +110,6 @@
     border-radius: 6px; font-size: 14px;
   }
 
-  /* Modal */
   .modal-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8);
     display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px;
@@ -148,7 +142,7 @@
 
 <main class="main">
 
-  <!-- 1. GÖZLEMCİ SEÇİM EKRANI -->
+  <!-- 1. GÖZLEMCİ SEÇİMİ -->
   <section id="screenWorkers">
     <div class="section-label">Etüt Sorumlusu / Gözlemci Seç</div>
     <div class="tile-grid" id="workerGrid"></div>
@@ -163,7 +157,7 @@
     </div>
   </section>
 
-  <!-- 2. ANA PANEL (DASHBOARD) -->
+  <!-- 2. ANA PANEL -->
   <section id="screenDashboard" hidden>
     <div id="activeBox"></div>
 
@@ -229,7 +223,7 @@
 
 </main>
 
-<!-- 5. DÜZENLEME MODALI (✏️) -->
+<!-- 5. DÜZENLEME MODALI -->
 <div id="editModal" class="modal-overlay" hidden>
   <div class="modal-card">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
@@ -248,7 +242,6 @@
 </div>
 
 <script>
-// --- LOCAL STORAGE YÖNETİMİ ---
 const STORE_KEYS = {
   workers: "kb_final_workers",
   jobs: "kb_final_jobs",
@@ -263,12 +256,19 @@ function setStorage(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {}
 }
 
+// Süreyi dakika cinsinden hesaplar (1 dakikadan azsa en az 1 dk kabul eder, sıfır yapmaz)
+function calcDurationMin(startIso, endIso) {
+  const diffMs = new Date(endIso) - new Date(startIso);
+  const rawMin = Math.round(diffMs / 60000);
+  return Math.max(1, rawMin); // Asla 0 dk olmaz!
+}
+
 let appState = {
   currentWorker: null,
   workers: [],
   jobs: ["Halat kesimi", "Kalıp temizliği", "Yağlama", "Demir atma", "Halat bağlama", "Cıvata ve tayrot sıkılması", "Beton dökme", "Vinç ile taşıma", "Söküm"],
   stations: ["Hat 1", "Hat 2", "Köprü Hattı", "Kalıp Sahası"],
-  logs: [], // Bütün kayıtlar
+  logs: [],
   activeJob: null,
   endingJob: null,
   editingJobId: null,
@@ -291,7 +291,6 @@ function showScreen(screenId) {
   });
 }
 
-// 1. SORUMLU LİSTESİ
 function renderWorkers() {
   const grid = el("workerGrid");
   grid.innerHTML = "";
@@ -340,12 +339,10 @@ el("btnSaveWorker").onclick = () => {
   renderWorkers();
 };
 
-// 2. DASHBOARD VE LİSTELEME
 function refreshDashboard() {
   if (!appState.currentWorker) return;
   const wid = appState.currentWorker.id;
 
-  // Aktif devam eden iş
   const activeBox = el("activeBox");
   activeBox.innerHTML = "";
   if (appState.activeJob && appState.activeJob.worker_id === wid) {
@@ -375,21 +372,26 @@ function refreshDashboard() {
     histContainer.hidden = false;
     histList.innerHTML = "";
     myDoneLogs.forEach(log => {
-      const dur = Math.round((new Date(log.end_time) - new Date(log.start_time)) / 60000);
+      const dur = calcDurationMin(log.start_time, log.end_time);
+      const adamSaat = ((dur * log.worker_count) / 60).toFixed(2);
+      
       const row = document.createElement("div");
       row.className = "history-row";
       row.innerHTML = `
         <div>
           <div class="history-title">[${log.activity}] ${log.job_type}</div>
-          <div class="history-sub">${log.station} &middot; ${log.worker_count} Kişi &middot; ${dur} dk ${log.stop_reason ? `<span style="color:#f39c12;">&middot; ${log.stop_reason}</span>` : ""}</div>
+          <div class="history-sub">${log.station} &middot; ${log.worker_count} Kişi &middot; ${dur} dk &middot; ${adamSaat} Adam-Saat ${log.stop_reason ? `<span style="color:#f39c12;">&middot; Duruş: ${log.stop_reason}</span>` : ""}</div>
         </div>
         <div class="history-right">
+          <div style="text-align:right; margin-right:4px;">
+            <div style="font-family:monospace; font-size:12px; color:#fff;">${fmtTime(log.start_time)}&ndash;${fmtTime(log.end_time)}</div>
+            <div style="font-size:11px; color:#2ecc71;">Tamamlandı</div>
+          </div>
           <button class="btn-action btn-edit" title="Düzenle">✏️</button>
           <button class="btn-action btn-del del" title="Sil">🗑️</button>
         </div>
       `;
 
-      // ✏️ DÜZENLEME TIKLAMASI
       row.querySelector(".btn-edit").onclick = () => {
         appState.editingJobId = log.id;
         el("editModalTitle").textContent = `Düzenle: ${log.job_type}`;
@@ -398,7 +400,6 @@ function refreshDashboard() {
         el("editModal").hidden = false;
       };
 
-      // 🗑️ SİLME TIKLAMASI
       row.querySelector(".btn-del").onclick = () => {
         if (confirm(`"${log.job_type}" kaydını silmek istediğinize emin misiniz?`)) {
           appState.logs = appState.logs.filter(l => l.id !== log.id);
@@ -414,7 +415,6 @@ function refreshDashboard() {
   }
 }
 
-// 3. MODAL YÖNETİMİ
 function closeEditModal() {
   appState.editingJobId = null;
   el("editModal").hidden = true;
@@ -434,7 +434,6 @@ el("btnSaveEdit").onclick = () => {
   refreshDashboard();
 };
 
-// 4. BAŞLATMA AKIŞI
 el("btnOpenStartScreen").onclick = () => {
   appState.selJob = null;
   appState.selStation = null;
@@ -534,12 +533,11 @@ el("btnConfirmEnd").onclick = () => {
   refreshDashboard();
 };
 
-// 5. EXCEL ÇIKTISI (TAM İZOLASYON & 0 REFERANSI)
+// EXCEL ÇIKTISI (TAM İZOLASYON, 0. DAKİKA VE SIFIR OLMAYAN SÜRELER)
 el("btnExportExcel").onclick = () => {
   if (!appState.currentWorker) return;
   const wid = appState.currentWorker.id;
 
-  // YALNIZCA BU KİŞİNİN KAYITLARI
   const myLogs = appState.logs
     .filter(l => l.worker_id === wid && l.status === "done")
     .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
@@ -549,12 +547,12 @@ el("btnExportExcel").onclick = () => {
     return;
   }
 
-  // İlk işlemin başlangıç saati = 0. dakika
   const baseTime = new Date(myLogs[0].start_time).getTime();
 
   const wsData = [
-    ["KAMBETON A.Ş. - ZAMAN ETÜDÜ FORMU"],
-    ["Etüt Sorumlusu:", `${appState.currentWorker.name} (Sicil: ${appState.currentWorker.id})`, "", "Tarih:", new Date().toLocaleDateString("tr-TR")],
+    ["KÖPRÜ KİRİŞİ ETÜDÜ - ZAMAN ETÜDÜ FORMU"],
+    ["Tarih:", new Date().toLocaleDateString("tr-TR"), "", "Tesis / Firma:", "KAMBETON A.Ş."],
+    ["Gözlemci:", `${appState.currentWorker.name} (Sicil: ${appState.currentWorker.id})`, "", "Vardiya:", "07:45 - 17:45"],
     [],
     ["İŞLEM NO", "İŞLEM ADI", "FAALİYET", "BAŞLANGIÇ SAATİ", "BAŞLAMA", "BİTİŞ SAATİ", "BİTİŞ", "SÜRE (dk)", "KİŞİ", "ADAM SAAT", "DURUŞ / GECİKME NEDENİ"]
   ];
@@ -565,8 +563,8 @@ el("btnExportExcel").onclick = () => {
     const sMs = new Date(l.start_time).getTime();
     const eMs = new Date(l.end_time).getTime();
     const baslama = Math.max(0, Math.round((sMs - baseTime) / 60000));
-    const bitis = Math.max(0, Math.round((eMs - baseTime) / 60000));
-    const sure = Math.max(0, Math.round((eMs - sMs) / 60000));
+    const bitis = Math.max(baslama + 1, Math.round((eMs - baseTime) / 60000));
+    const sure = calcDurationMin(l.start_time, l.end_time); // En az 1 dk
     const adamSaat = Number(((sure * l.worker_count) / 60).toFixed(2));
 
     if (l.activity === "İŞLEM") sumIslem += sure;
@@ -580,23 +578,32 @@ el("btnExportExcel").onclick = () => {
     ]);
   });
 
+  const totalFaaliyet = sumIslem + sumTasima + sumBekleme + sumHazirlik;
+
+  wsData.push([]);
   wsData.push([]);
   wsData.push(["FAALİYET", "SÜRE (DK)", "", "ÖZET TABLOSU", "DEĞER"]);
   wsData.push(["İŞLEM", sumIslem, "", "TOPLAM İŞLEM SÜRESİ", sumIslem]);
   wsData.push(["TAŞIMA", sumTasima, "", "TOPLAM TAŞIMA SÜRESİ", sumTasima]);
   wsData.push(["BEKLEME", sumBekleme, "", "TOPLAM BEKLEME SÜRESİ", sumBekleme]);
   wsData.push(["HAZIRLIK", sumHazirlik, "", "TOPLAM HAZIRLIK SÜRESİ", sumHazirlik]);
-  wsData.push(["", "", "", "TOPLAM ADAM SAAT", Number(sumAdamSaat.toFixed(2))]);
+  wsData.push(["", "", "", "TOPLAM ADAM SAAT SÜR.", Number(sumAdamSaat.toFixed(2))]);
+  wsData.push(["", "", "", "TOPLAM FAALİYET SÜRESİ", totalFaaliyet]);
 
   const ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws["!cols"] = [
+    { wch: 10 }, { wch: 32 }, { wch: 14 }, { wch: 16 }, { wch: 10 },
+    { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 25 }
+  ];
+
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Etut");
+  XLSX.utils.book_append_sheet(wb, ws, "Zaman_Etudu");
 
   const cleanName = appState.currentWorker.name.replace(/\s+/g, "_");
-  XLSX.writeFile(wb, `Kambeton_${cleanName}_Etudu.xlsx`);
+  const dateStr = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `etut_${cleanName}_${dateStr}.xlsx`);
 };
 
-// Sorumlu bazında sıfırlama
 el("btnClearMyEtud").onclick = () => {
   if (confirm(`DİKKAT: ${appState.currentWorker.name} adına tutulan mevcut etüt sıfırlanacak. Yeni etüt 0. dakikadan başlayacak.\n\nOnaylıyor musunuz?`)) {
     appState.logs = appState.logs.filter(l => l.worker_id !== appState.currentWorker.id);
@@ -605,7 +612,6 @@ el("btnClearMyEtud").onclick = () => {
   }
 };
 
-// Saat ve canlı sayaç
 setInterval(() => {
   const now = new Date();
   el("clock").textContent = now.toLocaleTimeString("tr-TR");
@@ -619,7 +625,6 @@ setInterval(() => {
   }
 }, 1000);
 
-// Başlat
 function init() {
   appState.workers = getStorage(STORE_KEYS.workers, []);
   appState.jobs = getStorage(STORE_KEYS.jobs, appState.jobs);
