@@ -79,16 +79,17 @@
   .btn-start:disabled { background: #444; color: #777; cursor: not-allowed; }
 
   .btn-danger {
-    width: 100%; padding: 14px; background: var(--danger); border: none; border-radius: 8px;
-    font-size: 15px; font-weight: bold; color: #fff; cursor: pointer;
+    width: 100%; padding: 12px; background: var(--danger); border: none; border-radius: 8px;
+    font-size: 14px; font-weight: bold; color: #fff; cursor: pointer;
   }
 
+  .active-cards-wrapper { display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px; }
   .active-card {
-    background: #25282c; border-left: 4px solid var(--orange); border-radius: 8px; padding: 16px; margin-bottom: 15px;
+    background: #25282c; border-left: 4px solid var(--orange); border-radius: 8px; padding: 14px 16px;
   }
   .active-tag { font-size: 12px; color: var(--orange); font-weight: bold; margin-bottom: 4px; }
-  .active-title { font-size: 17px; font-weight: bold; margin-bottom: 8px; }
-  .timer { font-family: monospace; font-size: 26px; font-weight: bold; color: #ffb84d; margin-bottom: 12px; }
+  .active-title { font-size: 16px; font-weight: bold; margin-bottom: 6px; }
+  .timer { font-family: monospace; font-size: 24px; font-weight: bold; color: #ffb84d; margin-bottom: 10px; }
 
   .history-row {
     background: var(--card); border: 1px solid var(--card-border); border-radius: 8px;
@@ -173,7 +174,8 @@
       <button class="btn-ghost" id="btnManualNewEtud" style="font-size:12px; border-color:#ff6a13; color:#ff6a13;">+ Yeni Etüde Geç</button>
     </div>
 
-    <div id="activeBox"></div>
+    <!-- Eşzamanlı Devam Eden İşlemler Kutusu -->
+    <div class="active-cards-wrapper" id="activeJobsWrapper"></div>
 
     <button class="btn-start" id="btnOpenStartScreen">+ YENİ İŞLEM BAŞLAT</button>
 
@@ -260,7 +262,8 @@ const STORE_KEYS = {
   workers: "kb_final_workers",
   jobs: "kb_final_jobs",
   stations: "kb_final_stations",
-  activeBatchLogs: "kb_active_batch_logs_", // Sorumlu bazlı aktif etüt kayıtları
+  activeBatchLogs: "kb_active_batch_logs_",
+  activeRunningJobs: "kb_active_running_jobs_", // Devam eden aktif işler listesi
   etudCounter: "kb_etud_counter_"
 };
 
@@ -284,7 +287,7 @@ let appState = {
   stations: ["Hat 1", "Hat 2", "Köprü Hattı", "Kalıp Sahası"],
   currentEtudNo: 1,
   activeBatchLogs: [],
-  activeJob: null,
+  activeJobs: [], // Çoklu eşzamanlı devam eden işler
   endingJob: null,
   editingJobId: null,
   selActivity: "İŞLEM",
@@ -334,9 +337,9 @@ function selectWorker(w) {
   el("displayWorkerId").textContent = w.id;
   el("workerBar").hidden = false;
 
-  // Kişinin aktif etüt sayısını ve listesini yükle
   appState.currentEtudNo = getStorage(STORE_KEYS.etudCounter + w.id, 1);
   appState.activeBatchLogs = getStorage(STORE_KEYS.activeBatchLogs + w.id, []);
+  appState.activeJobs = getStorage(STORE_KEYS.activeRunningJobs + w.id, []);
   
   el("etudBatchBadge").textContent = `${appState.currentEtudNo}. Etüt (${w.name})`;
 
@@ -365,27 +368,28 @@ function refreshDashboard() {
   if (!appState.currentWorker) return;
   const wid = appState.currentWorker.id;
 
-  const activeBox = el("activeBox");
-  activeBox.innerHTML = "";
-  if (appState.activeJob && appState.activeJob.worker_id === wid) {
+  // Eşzamanlı devam eden işlerin çizimi
+  const wrapper = el("activeJobsWrapper");
+  wrapper.innerHTML = "";
+  appState.activeJobs.forEach(job => {
     const card = document.createElement("div");
     card.className = "active-card";
     card.innerHTML = `
-      <div class="active-tag">${appState.activeJob.activity} &middot; ${appState.activeJob.worker_count} Kişi</div>
-      <div class="active-title">${appState.activeJob.job_type} (${appState.activeJob.station})</div>
-      <div class="timer" id="liveTimer">00:00:00</div>
-      <button class="btn-danger" id="btnFinishJob">İŞLEMİ BİTİR</button>
+      <div class="active-tag">${job.activity} &middot; ${job.worker_count} Kişi</div>
+      <div class="active-title">${job.job_type} (${job.station})</div>
+      <div class="timer" id="timer-${job.id}">00:00:00</div>
+      <button class="btn-danger" data-id="${job.id}">İŞLEMİ BİTİR</button>
     `;
-    card.querySelector("#btnFinishJob").onclick = () => {
-      appState.endingJob = appState.activeJob;
-      el("endTitleDisplay").textContent = `[${appState.endingJob.activity}] ${appState.endingJob.job_type}`;
+    card.querySelector("button").onclick = () => {
+      appState.endingJob = job;
+      el("endTitleDisplay").textContent = `[${job.activity}] ${job.job_type} (${job.station})`;
       el("endStopReasonInput").value = "";
       showScreen("screenEnd");
     };
-    activeBox.appendChild(card);
-  }
+    wrapper.appendChild(card);
+  });
 
-  // YALNIZCA BU ETÜTTEKİ BİTMİŞ İŞLER
+  // Tamamlanan işler listesi
   const histContainer = el("historyContainer");
   const histList = el("historyList");
   el("historySectionLabel").textContent = `Bu Etütte Yapılan İşlemler (${appState.activeBatchLogs.length})`;
@@ -526,20 +530,25 @@ el("customWCount").oninput = (e) => {
   }
 };
 
+// YENİ İŞLEM BAŞLAT: Çoklu işleri listeye ekler
 el("btnConfirmStart").onclick = () => {
-  appState.activeJob = {
+  const wid = appState.currentWorker.id;
+  const newJob = {
     id: "job-" + Date.now(),
-    worker_id: appState.currentWorker.id,
+    worker_id: wid,
     job_type: appState.selJob,
     activity: appState.selActivity,
     station: appState.selStation,
     worker_count: appState.selCount,
     start_time: new Date().toISOString()
   };
+  appState.activeJobs.push(newJob);
+  setStorage(STORE_KEYS.activeRunningJobs + wid, appState.activeJobs);
   showScreen("screenDashboard");
   refreshDashboard();
 };
 
+// İŞLEM BİTİR: Sadece bitirilen işi listeden çıkarıp tamamlananlara taşır
 el("btnConfirmEnd").onclick = () => {
   if (!appState.endingJob) return;
   const wid = appState.currentWorker.id;
@@ -549,15 +558,19 @@ el("btnConfirmEnd").onclick = () => {
     stop_reason: el("endStopReasonInput").value.trim(),
     status: "done"
   };
+  
   appState.activeBatchLogs.push(finished);
   setStorage(STORE_KEYS.activeBatchLogs + wid, appState.activeBatchLogs);
-  appState.activeJob = null;
+
+  appState.activeJobs = appState.activeJobs.filter(j => j.id !== appState.endingJob.id);
+  setStorage(STORE_KEYS.activeRunningJobs + wid, appState.activeJobs);
+
   appState.endingJob = null;
   showScreen("screenDashboard");
   refreshDashboard();
 };
 
-// ---------------- ETÜDÜ BİTİR & İNDİR (2. SEÇENEK: AYRI DOSYA & OTOMATİK SIFIRLAMA) ----------------
+// EXCEL ÇIKTISI
 el("btnFinishAndExport").onclick = () => {
   if (!appState.currentWorker) return;
   const wid = appState.currentWorker.id;
@@ -568,7 +581,6 @@ el("btnFinishAndExport").onclick = () => {
     return;
   }
 
-  // Bu etüdün ilk işlemi = 0. dakika
   const baseTime = new Date(logsToExport[0].start_time).getTime();
 
   const wsData = [
@@ -626,7 +638,6 @@ el("btnFinishAndExport").onclick = () => {
   const fileName = `etut_${cleanName}_${appState.currentEtudNo}_Etut_${dateStr}.xlsx`;
   XLSX.writeFile(wb, fileName);
 
-  // İNDİRİLDİKTEN SONRA LİSTEYİ SIFIRLA VE BİR SONRAKİ ETÜDE GEÇ
   appState.activeBatchLogs = [];
   setStorage(STORE_KEYS.activeBatchLogs + wid, []);
 
@@ -635,13 +646,12 @@ el("btnFinishAndExport").onclick = () => {
 
   el("etudBatchBadge").textContent = `${appState.currentEtudNo}. Etüt (${appState.currentWorker.name})`;
   refreshDashboard();
-  alert(`${fileName} başarıyla indirildi!\n\n${appState.currentEtudNo}. Etüt başladı. Yeni işlemler 0. dakikadan sayılacaktır.`);
+  alert(`${fileName} başarıyla indirildi!\n\n${appState.currentEtudNo}. Etüt başladı.`);
 };
 
-// Manuel Yeni Etüt Butonu
 el("btnManualNewEtud").onclick = () => {
   if (appState.activeBatchLogs.length > 0) {
-    if (!confirm("Mevcut etütte kaydedilmiş işlemler var. Yeni etüde geçerseniz bu liste sıfırlanır. Devam edilsin mi?")) return;
+    if (!confirm("Mevcut etütte kayıtlı işlemler var. Yeni etüde geçerseniz liste sıfırlanır. Devam edilsin mi?")) return;
   }
   const wid = appState.currentWorker.id;
   appState.activeBatchLogs = [];
@@ -652,7 +662,6 @@ el("btnManualNewEtud").onclick = () => {
   refreshDashboard();
 };
 
-// Kaydetmeden Sıfırlama
 el("btnResetActiveEtud").onclick = () => {
   if (confirm(`Bu etüde ait (${appState.activeBatchLogs.length}) işlem silinecek. Emin misiniz?`)) {
     const wid = appState.currentWorker.id;
@@ -662,12 +671,15 @@ el("btnResetActiveEtud").onclick = () => {
   }
 };
 
+// Canlı sayaçlar (Tüm paralel işler için bağımsız çalışır)
 setInterval(() => {
   const now = new Date();
   el("clock").textContent = now.toLocaleTimeString("tr-TR");
-  if (appState.activeJob) {
-    const td = document.getElementById("liveTimer");
-    if (td) td.textContent = fmtDuration(now - new Date(appState.activeJob.start_time));
+  if (appState.activeJobs && appState.activeJobs.length > 0) {
+    appState.activeJobs.forEach(job => {
+      const td = document.getElementById("timer-" + job.id);
+      if (td) td.textContent = fmtDuration(now - new Date(job.start_time));
+    });
   }
   if (appState.endingJob) {
     const et = document.getElementById("endTimerDisplay");
