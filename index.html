@@ -41,6 +41,11 @@
 
   .main { max-width: 650px; margin: 0 auto; padding: 20px 16px; }
 
+  .etud-banner {
+    background: #202327; border-left: 4px solid var(--orange); border-radius: 8px;
+    padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;
+  }
+
   .section-label { font-size: 12px; text-transform: uppercase; color: var(--text-muted); font-weight: bold; margin: 18px 0 8px 0; }
 
   .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 12px; }
@@ -142,7 +147,7 @@
 
 <main class="main">
 
-  <!-- 1. GÖZLEMCİ SEÇİMİ -->
+  <!-- 1. GÖZLEMCİ SEÇİM EKRANI -->
   <section id="screenWorkers">
     <div class="section-label">Etüt Sorumlusu / Gözlemci Seç</div>
     <div class="tile-grid" id="workerGrid"></div>
@@ -159,21 +164,30 @@
 
   <!-- 2. ANA PANEL -->
   <section id="screenDashboard" hidden>
+    
+    <div class="etud-banner">
+      <div>
+        <span style="font-size:11px; color:#aaa; text-transform:uppercase;">Aktif Oturum:</span>
+        <div style="font-size:16px; font-weight:bold; color:#fff;" id="etudBatchBadge">1. Etüt</div>
+      </div>
+      <button class="btn-ghost" id="btnManualNewEtud" style="font-size:12px; border-color:#ff6a13; color:#ff6a13;">+ Yeni Etüde Geç</button>
+    </div>
+
     <div id="activeBox"></div>
 
     <button class="btn-start" id="btnOpenStartScreen">+ YENİ İŞLEM BAŞLAT</button>
 
     <div id="historyContainer" style="margin-top:25px;" hidden>
-      <div class="section-label">Bu Gözlemcinin Tamamladığı İşlemler</div>
+      <div class="section-label" id="historySectionLabel">Bu Etütte Yapılan İşlemler (0)</div>
       <div id="historyList"></div>
     </div>
 
     <div style="margin-top:30px; display:flex; flex-direction:column; gap:10px;">
-      <button class="btn-ghost" id="btnExportExcel" style="padding:14px; border-color:var(--orange); color:#fff; font-weight:bold;">
-        📥 SADECE BU ETÜDÜ EXCEL'E AKTAR
+      <button class="btn-start" id="btnFinishAndExport" style="background:#27ae60; color:#fff;">
+        📥 BU ETÜDÜ BİTİR & EXCEL'E AKTAR
       </button>
-      <button class="btn-ghost" id="btnClearMyEtud" style="padding:10px; border-color:var(--danger); color:var(--danger); font-size:12px;">
-        🗑️ Bu Gözlemcinin Kayıtlarını Sıfırla (Yeni Etüde Başla)
+      <button class="btn-ghost" id="btnResetActiveEtud" style="padding:10px; border-color:var(--danger); color:var(--danger); font-size:12px;">
+        🗑️ Bu Etüdün Verilerini Temizle (Kaydetmeden Sıfırla)
       </button>
     </div>
   </section>
@@ -246,7 +260,8 @@ const STORE_KEYS = {
   workers: "kb_final_workers",
   jobs: "kb_final_jobs",
   stations: "kb_final_stations",
-  logs: "kb_final_logs"
+  activeBatchLogs: "kb_active_batch_logs_", // Sorumlu bazlı aktif etüt kayıtları
+  etudCounter: "kb_etud_counter_"
 };
 
 function getStorage(key, def) {
@@ -256,11 +271,10 @@ function setStorage(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {}
 }
 
-// Süreyi dakika cinsinden hesaplar (1 dakikadan azsa en az 1 dk kabul eder, sıfır yapmaz)
 function calcDurationMin(startIso, endIso) {
   const diffMs = new Date(endIso) - new Date(startIso);
   const rawMin = Math.round(diffMs / 60000);
-  return Math.max(1, rawMin); // Asla 0 dk olmaz!
+  return Math.max(1, rawMin);
 }
 
 let appState = {
@@ -268,7 +282,8 @@ let appState = {
   workers: [],
   jobs: ["Halat kesimi", "Kalıp temizliği", "Yağlama", "Demir atma", "Halat bağlama", "Cıvata ve tayrot sıkılması", "Beton dökme", "Vinç ile taşıma", "Söküm"],
   stations: ["Hat 1", "Hat 2", "Köprü Hattı", "Kalıp Sahası"],
-  logs: [],
+  currentEtudNo: 1,
+  activeBatchLogs: [],
   activeJob: null,
   endingJob: null,
   editingJobId: null,
@@ -318,6 +333,13 @@ function selectWorker(w) {
   el("displayWorkerName").textContent = w.name;
   el("displayWorkerId").textContent = w.id;
   el("workerBar").hidden = false;
+
+  // Kişinin aktif etüt sayısını ve listesini yükle
+  appState.currentEtudNo = getStorage(STORE_KEYS.etudCounter + w.id, 1);
+  appState.activeBatchLogs = getStorage(STORE_KEYS.activeBatchLogs + w.id, []);
+  
+  el("etudBatchBadge").textContent = `${appState.currentEtudNo}. Etüt (${w.name})`;
+
   showScreen("screenDashboard");
   refreshDashboard();
 }
@@ -363,15 +385,15 @@ function refreshDashboard() {
     activeBox.appendChild(card);
   }
 
-  // YALNIZCA BU KİŞİNİN BİTMİŞ İŞLERİ
-  const myDoneLogs = appState.logs.filter(l => l.worker_id === wid && l.status === "done").reverse();
+  // YALNIZCA BU ETÜTTEKİ BİTMİŞ İŞLER
   const histContainer = el("historyContainer");
   const histList = el("historyList");
+  el("historySectionLabel").textContent = `Bu Etütte Yapılan İşlemler (${appState.activeBatchLogs.length})`;
 
-  if (myDoneLogs.length > 0) {
+  if (appState.activeBatchLogs.length > 0) {
     histContainer.hidden = false;
     histList.innerHTML = "";
-    myDoneLogs.forEach(log => {
+    [...appState.activeBatchLogs].reverse().forEach((log) => {
       const dur = calcDurationMin(log.start_time, log.end_time);
       const adamSaat = ((dur * log.worker_count) / 60).toFixed(2);
       
@@ -402,8 +424,8 @@ function refreshDashboard() {
 
       row.querySelector(".btn-del").onclick = () => {
         if (confirm(`"${log.job_type}" kaydını silmek istediğinize emin misiniz?`)) {
-          appState.logs = appState.logs.filter(l => l.id !== log.id);
-          setStorage(STORE_KEYS.logs, appState.logs);
+          appState.activeBatchLogs = appState.activeBatchLogs.filter(l => l.id !== log.id);
+          setStorage(STORE_KEYS.activeBatchLogs + wid, appState.activeBatchLogs);
           refreshDashboard();
         }
       };
@@ -424,11 +446,12 @@ el("btnCancelEdit").onclick = closeEditModal;
 
 el("btnSaveEdit").onclick = () => {
   if (!appState.editingJobId) return;
-  const target = appState.logs.find(l => l.id === appState.editingJobId);
+  const wid = appState.currentWorker.id;
+  const target = appState.activeBatchLogs.find(l => l.id === appState.editingJobId);
   if (target) {
     target.worker_count = parseInt(el("editWorkerCountInput").value) || 1;
     target.stop_reason = el("editStopReasonInput").value.trim();
-    setStorage(STORE_KEYS.logs, appState.logs);
+    setStorage(STORE_KEYS.activeBatchLogs + wid, appState.activeBatchLogs);
   }
   closeEditModal();
   refreshDashboard();
@@ -519,52 +542,51 @@ el("btnConfirmStart").onclick = () => {
 
 el("btnConfirmEnd").onclick = () => {
   if (!appState.endingJob) return;
+  const wid = appState.currentWorker.id;
   const finished = {
     ...appState.endingJob,
     end_time: new Date().toISOString(),
     stop_reason: el("endStopReasonInput").value.trim(),
     status: "done"
   };
-  appState.logs.push(finished);
-  setStorage(STORE_KEYS.logs, appState.logs);
+  appState.activeBatchLogs.push(finished);
+  setStorage(STORE_KEYS.activeBatchLogs + wid, appState.activeBatchLogs);
   appState.activeJob = null;
   appState.endingJob = null;
   showScreen("screenDashboard");
   refreshDashboard();
 };
 
-// EXCEL ÇIKTISI (TAM İZOLASYON, 0. DAKİKA VE SIFIR OLMAYAN SÜRELER)
-el("btnExportExcel").onclick = () => {
+// ---------------- ETÜDÜ BİTİR & İNDİR (2. SEÇENEK: AYRI DOSYA & OTOMATİK SIFIRLAMA) ----------------
+el("btnFinishAndExport").onclick = () => {
   if (!appState.currentWorker) return;
   const wid = appState.currentWorker.id;
+  const logsToExport = [...appState.activeBatchLogs];
 
-  const myLogs = appState.logs
-    .filter(l => l.worker_id === wid && l.status === "done")
-    .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
-
-  if (myLogs.length === 0) {
-    alert(`${appState.currentWorker.name} adına tamamlanmış bir işlem bulunmuyor.`);
+  if (logsToExport.length === 0) {
+    alert("Bu etütte henüz tamamlanmış bir işlem yok.");
     return;
   }
 
-  const baseTime = new Date(myLogs[0].start_time).getTime();
+  // Bu etüdün ilk işlemi = 0. dakika
+  const baseTime = new Date(logsToExport[0].start_time).getTime();
 
   const wsData = [
     ["KÖPRÜ KİRİŞİ ETÜDÜ - ZAMAN ETÜDÜ FORMU"],
     ["Tarih:", new Date().toLocaleDateString("tr-TR"), "", "Tesis / Firma:", "KAMBETON A.Ş."],
-    ["Gözlemci:", `${appState.currentWorker.name} (Sicil: ${appState.currentWorker.id})`, "", "Vardiya:", "07:45 - 17:45"],
+    ["Gözlemci:", `${appState.currentWorker.name} (Sicil: ${appState.currentWorker.id})`, "", "Etüt:", `${appState.currentEtudNo}. Etüt`],
     [],
     ["İŞLEM NO", "İŞLEM ADI", "FAALİYET", "BAŞLANGIÇ SAATİ", "BAŞLAMA", "BİTİŞ SAATİ", "BİTİŞ", "SÜRE (dk)", "KİŞİ", "ADAM SAAT", "DURUŞ / GECİKME NEDENİ"]
   ];
 
   let sumIslem = 0, sumTasima = 0, sumBekleme = 0, sumHazirlik = 0, sumAdamSaat = 0;
 
-  myLogs.forEach((l, idx) => {
+  logsToExport.forEach((l, idx) => {
     const sMs = new Date(l.start_time).getTime();
     const eMs = new Date(l.end_time).getTime();
     const baslama = Math.max(0, Math.round((sMs - baseTime) / 60000));
-    const bitis = Math.max(baslama + 1, Math.round((eMs - baseTime) / 60000));
-    const sure = calcDurationMin(l.start_time, l.end_time); // En az 1 dk
+    const sure = calcDurationMin(l.start_time, l.end_time);
+    const bitis = baslama + sure;
     const adamSaat = Number(((sure * l.worker_count) / 60).toFixed(2));
 
     if (l.activity === "İŞLEM") sumIslem += sure;
@@ -601,13 +623,41 @@ el("btnExportExcel").onclick = () => {
 
   const cleanName = appState.currentWorker.name.replace(/\s+/g, "_");
   const dateStr = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `etut_${cleanName}_${dateStr}.xlsx`);
+  const fileName = `etut_${cleanName}_${appState.currentEtudNo}_Etut_${dateStr}.xlsx`;
+  XLSX.writeFile(wb, fileName);
+
+  // İNDİRİLDİKTEN SONRA LİSTEYİ SIFIRLA VE BİR SONRAKİ ETÜDE GEÇ
+  appState.activeBatchLogs = [];
+  setStorage(STORE_KEYS.activeBatchLogs + wid, []);
+
+  appState.currentEtudNo += 1;
+  setStorage(STORE_KEYS.etudCounter + wid, appState.currentEtudNo);
+
+  el("etudBatchBadge").textContent = `${appState.currentEtudNo}. Etüt (${appState.currentWorker.name})`;
+  refreshDashboard();
+  alert(`${fileName} başarıyla indirildi!\n\n${appState.currentEtudNo}. Etüt başladı. Yeni işlemler 0. dakikadan sayılacaktır.`);
 };
 
-el("btnClearMyEtud").onclick = () => {
-  if (confirm(`DİKKAT: ${appState.currentWorker.name} adına tutulan mevcut etüt sıfırlanacak. Yeni etüt 0. dakikadan başlayacak.\n\nOnaylıyor musunuz?`)) {
-    appState.logs = appState.logs.filter(l => l.worker_id !== appState.currentWorker.id);
-    setStorage(STORE_KEYS.logs, appState.logs);
+// Manuel Yeni Etüt Butonu
+el("btnManualNewEtud").onclick = () => {
+  if (appState.activeBatchLogs.length > 0) {
+    if (!confirm("Mevcut etütte kaydedilmiş işlemler var. Yeni etüde geçerseniz bu liste sıfırlanır. Devam edilsin mi?")) return;
+  }
+  const wid = appState.currentWorker.id;
+  appState.activeBatchLogs = [];
+  setStorage(STORE_KEYS.activeBatchLogs + wid, []);
+  appState.currentEtudNo += 1;
+  setStorage(STORE_KEYS.etudCounter + wid, appState.currentEtudNo);
+  el("etudBatchBadge").textContent = `${appState.currentEtudNo}. Etüt (${appState.currentWorker.name})`;
+  refreshDashboard();
+};
+
+// Kaydetmeden Sıfırlama
+el("btnResetActiveEtud").onclick = () => {
+  if (confirm(`Bu etüde ait (${appState.activeBatchLogs.length}) işlem silinecek. Emin misiniz?`)) {
+    const wid = appState.currentWorker.id;
+    appState.activeBatchLogs = [];
+    setStorage(STORE_KEYS.activeBatchLogs + wid, []);
     refreshDashboard();
   }
 };
@@ -629,7 +679,6 @@ function init() {
   appState.workers = getStorage(STORE_KEYS.workers, []);
   appState.jobs = getStorage(STORE_KEYS.jobs, appState.jobs);
   appState.stations = getStorage(STORE_KEYS.stations, appState.stations);
-  appState.logs = getStorage(STORE_KEYS.logs, []);
   renderWorkers();
   showScreen("screenWorkers");
 }
