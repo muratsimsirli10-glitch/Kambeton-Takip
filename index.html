@@ -39,12 +39,28 @@
   }
   .btn-ghost:hover { background: #333; color: #fff; }
 
-  .main { max-width: 650px; margin: 0 auto; padding: 20px 16px; }
+  .main { max-width: 650px; margin: 0 auto; padding: 16px; }
 
-  .etud-banner {
-    background: #202327; border-left: 4px solid var(--orange); border-radius: 8px;
-    padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;
+  /* SEKME (TAB) SİSTEMİ */
+  .tabs-wrapper {
+    display: flex; gap: 6px; align-items: center; overflow-x: auto; padding-bottom: 10px; margin-bottom: 15px;
+    border-bottom: 1px solid var(--card-border);
   }
+  .tab-item {
+    background: #232528; color: #aaa; border: 1px solid #3c4046; border-radius: 8px;
+    padding: 10px 14px; font-size: 13px; font-weight: bold; cursor: pointer; white-space: nowrap;
+    display: flex; align-items: center; gap: 8px; transition: 0.15s;
+  }
+  .tab-item.active { background: var(--orange); color: #111; border-color: var(--orange); }
+  .tab-item .tab-close {
+    font-size: 14px; line-height: 1; border-radius: 50%; padding: 2px;
+  }
+  .tab-item .tab-close:hover { background: rgba(0,0,0,0.2); color: #fff; }
+  .btn-add-tab {
+    background: transparent; border: 1px dashed #555; color: #888; border-radius: 8px;
+    padding: 10px 14px; font-size: 13px; font-weight: bold; cursor: pointer; white-space: nowrap;
+  }
+  .btn-add-tab:hover { border-color: var(--orange); color: var(--orange); }
 
   .section-label { font-size: 12px; text-transform: uppercase; color: var(--text-muted); font-weight: bold; margin: 18px 0 8px 0; }
 
@@ -83,7 +99,6 @@
     font-size: 14px; font-weight: bold; color: #fff; cursor: pointer;
   }
 
-  /* AYNI ANDA ÇALIŞAN İŞLERİN KARTLARI */
   .active-cards-container { display: flex; flex-direction: column; gap: 14px; margin-bottom: 15px; }
   .active-card {
     background: #25282c; border-left: 4px solid var(--orange); border-radius: 8px; padding: 14px 16px;
@@ -150,7 +165,7 @@
 
 <main class="main">
 
-  <!-- 1. GÖZLEMCİ SEÇİM EKRANI -->
+  <!-- 1. GÖZLEMCİ SEÇİMİ -->
   <section id="screenWorkers">
     <div class="section-label">Etüt Sorumlusu / Gözlemci Seç</div>
     <div class="tile-grid" id="workerGrid"></div>
@@ -165,33 +180,31 @@
     </div>
   </section>
 
-  <!-- 2. ANA PANEL -->
+  <!-- 2. ANA PANEL (SEKMELİ ETÜT YÖNETİMİ) -->
   <section id="screenDashboard" hidden>
     
-    <div class="etud-banner">
-      <div>
-        <span style="font-size:11px; color:#aaa; text-transform:uppercase;">Aktif Oturum:</span>
-        <div style="font-size:16px; font-weight:bold; color:#fff;" id="etudBatchBadge">1. Etüt</div>
-      </div>
-      <button class="btn-ghost" id="btnManualNewEtud" style="font-size:12px; border-color:#ff6a13; color:#ff6a13;">+ Yeni Etüde Geç</button>
+    <!-- Üst Sekmeler -->
+    <div class="tabs-wrapper" id="tabsHeader">
+      <div id="tabButtonsContainer" style="display:flex; gap:6px;"></div>
+      <button class="btn-add-tab" id="btnAddNewTab">+ Yeni Etüt Aç</button>
     </div>
 
-    <!-- EŞZAMANLI İŞLERİN ÇİZİLECEĞİ DİNAMİK ALAN -->
+    <!-- Aktif Sekmedeki Paralel İşlemler -->
     <div class="active-cards-container" id="activeJobsContainer"></div>
 
-    <button class="btn-start" id="btnOpenStartScreen">+ YENİ İŞLEM BAŞLAT</button>
+    <button class="btn-start" id="btnOpenStartScreen">+ BU ETÜTTE YENİ İŞLEM BAŞLAT</button>
 
     <div id="historyContainer" style="margin-top:25px;" hidden>
-      <div class="section-label" id="historySectionLabel">Bu Etütte Yapılan İşlemler (0)</div>
+      <div class="section-label" id="historySectionLabel">Tamamlanan İşlemler (0)</div>
       <div id="historyList"></div>
     </div>
 
     <div style="margin-top:30px; display:flex; flex-direction:column; gap:10px;">
       <button class="btn-start" id="btnFinishAndExport" style="background:#27ae60; color:#fff;">
-        📥 BU ETÜDÜ BİTİR & EXCEL'E AKTAR
+        📥 SADECE BU ETÜDÜ BİTİR & EXCEL'E AKTAR
       </button>
       <button class="btn-ghost" id="btnResetActiveEtud" style="padding:10px; border-color:var(--danger); color:var(--danger); font-size:12px;">
-        🗑️ Bu Etüdün Verilerini Temizle (Kaydetmeden Sıfırla)
+        🗑️ Bu Etüdün Verilerini Sıfırla
       </button>
     </div>
   </section>
@@ -264,9 +277,7 @@ const STORE_KEYS = {
   workers: "kb_final_workers",
   jobs: "kb_final_jobs",
   stations: "kb_final_stations",
-  activeBatchLogs: "kb_active_batch_logs_",
-  activeRunningList: "kb_active_running_list_", // Çoklu devam eden işlerin listesi
-  etudCounter: "kb_etud_counter_"
+  studyTabs: "kb_study_tabs_v4_" // Sorumlu bazlı etüt sekmeleri
 };
 
 function getStorage(key, def) {
@@ -276,20 +287,16 @@ function setStorage(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {}
 }
 
-function calcDurationMin(startIso, endIso) {
-  const diffMs = new Date(endIso) - new Date(startIso);
-  const rawMin = Math.round(diffMs / 60000);
-  return Math.max(1, rawMin);
-}
-
 let appState = {
   currentWorker: null,
   workers: [],
   jobs: ["Halat kesimi", "Kalıp temizliği", "Yağlama", "Demir atma", "Halat bağlama", "Cıvata ve tayrot sıkılması", "Beton dökme", "Vinç ile taşıma", "Söküm"],
   stations: ["Hat 1", "Hat 2", "Köprü Hattı", "Kalıp Sahası"],
-  currentEtudNo: 1,
-  activeBatchLogs: [],
-  activeRunningJobs: [], // Birden fazla işi aynı anda tutan dizi
+  
+  // SEKMELİ YAPI
+  tabs: [], // [{ id, name, activeJobs: [], doneLogs: [] }]
+  activeTabId: null,
+
   endingJob: null,
   editingJobId: null,
   selActivity: "İŞLEM",
@@ -339,14 +346,26 @@ function selectWorker(w) {
   el("displayWorkerId").textContent = w.id;
   el("workerBar").hidden = false;
 
-  appState.currentEtudNo = getStorage(STORE_KEYS.etudCounter + w.id, 1);
-  appState.activeBatchLogs = getStorage(STORE_KEYS.activeBatchLogs + w.id, []);
-  appState.activeRunningJobs = getStorage(STORE_KEYS.activeRunningList + w.id, []);
-  
-  el("etudBatchBadge").textContent = `${appState.currentEtudNo}. Etüt (${w.name})`;
+  // Kişinin etüt sekmelerini yükle veya varsayılan 1. Etüdü aç
+  const savedTabs = getStorage(STORE_KEYS.studyTabs + w.id, []);
+  if (savedTabs.length > 0) {
+    appState.tabs = savedTabs;
+    appState.activeTabId = savedTabs[0].id;
+  } else {
+    const initialTab = { id: "tab-" + Date.now(), name: "1. Etüt", activeJobs: [], doneLogs: [] };
+    appState.tabs = [initialTab];
+    appState.activeTabId = initialTab.id;
+    saveTabsToStorage();
+  }
 
   showScreen("screenDashboard");
+  renderTabsHeader();
   refreshDashboard();
+}
+
+function saveTabsToStorage() {
+  if (!appState.currentWorker) return;
+  setStorage(STORE_KEYS.studyTabs + appState.currentWorker.id, appState.tabs);
 }
 
 el("logoutBtn").onclick = () => {
@@ -366,15 +385,81 @@ el("btnSaveWorker").onclick = () => {
   renderWorkers();
 };
 
+// ---------------- SEKME (TAB) YÖNETİMİ ----------------
+function renderTabsHeader() {
+  const container = el("tabButtonsContainer");
+  container.innerHTML = "";
+
+  appState.tabs.forEach((tab, index) => {
+    const btn = document.createElement("div");
+    btn.className = "tab-item" + (tab.id === appState.activeTabId ? " active" : "");
+    btn.innerHTML = `
+      <span>${tab.name}</span>
+      ${appState.tabs.length > 1 ? `<span class="tab-close" title="Kapat">&times;</span>` : ""}
+    `;
+
+    // Sekmeye Geçiş
+    btn.onclick = (e) => {
+      if (e.target.classList.contains("tab-close")) return;
+      appState.activeTabId = tab.id;
+      renderTabsHeader();
+      refreshDashboard();
+    };
+
+    // Sekmeyi Kapatma
+    const closeBtn = btn.querySelector(".tab-close");
+    if (closeBtn) {
+      closeBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (confirm(`"${tab.name}" sekmesini kapatmak istiyor musunuz? Verileri silinecektir.`)) {
+          appState.tabs = appState.tabs.filter(t => t.id !== tab.id);
+          if (appState.activeTabId === tab.id) {
+            appState.activeTabId = appState.tabs[0].id;
+          }
+          saveTabsToStorage();
+          renderTabsHeader();
+          refreshDashboard();
+        }
+      };
+    }
+
+    container.appendChild(btn);
+  });
+}
+
+// Yeni Sekme Ekleme
+el("btnAddNewTab").onclick = () => {
+  const tabName = prompt("Yeni Etüt Adı (Örn: 2. Etüt veya Hat 2 Köprü):", `${appState.tabs.length + 1}. Etüt`);
+  if (!tabName || !tabName.trim()) return;
+
+  const newTab = {
+    id: "tab-" + Date.now(),
+    name: tabName.trim(),
+    activeJobs: [],
+    doneLogs: []
+  };
+  appState.tabs.push(newTab);
+  appState.activeTabId = newTab.id;
+  saveTabsToStorage();
+  renderTabsHeader();
+  refreshDashboard();
+};
+
+function getActiveTab() {
+  return appState.tabs.find(t => t.id === appState.activeTabId) || appState.tabs[0];
+}
+
+// ---------------- EKRANI ÇİZME ----------------
 function refreshDashboard() {
   if (!appState.currentWorker) return;
-  const wid = appState.currentWorker.id;
+  const currentTab = getActiveTab();
+  if (!currentTab) return;
 
-  // ÇOKLU AKTİF İŞLERİ AYRI AYRI ÇİZİYORUZ
+  // Aktif sekmedeki çalışan işleri çiz
   const container = el("activeJobsContainer");
   container.innerHTML = "";
 
-  appState.activeRunningJobs.forEach(job => {
+  currentTab.activeJobs.forEach(job => {
     const card = document.createElement("div");
     card.className = "active-card";
     card.innerHTML = `
@@ -394,16 +479,23 @@ function refreshDashboard() {
     container.appendChild(card);
   });
 
-  // TAMAMLANANLAR LİSTESİ
+  // Tamamlanan işleri çiz
   const histContainer = el("historyContainer");
   const histList = el("historyList");
-  el("historySectionLabel").textContent = `Bu Etütte Yapılan İşlemler (${appState.activeBatchLogs.length})`;
+  el("historySectionLabel").textContent = `${currentTab.name} - Tamamlanan İşlemler (${currentTab.doneLogs.length})`;
 
-  if (appState.activeBatchLogs.length > 0) {
+  if (currentTab.doneLogs.length > 0) {
     histContainer.hidden = false;
     histList.innerHTML = "";
-    [...appState.activeBatchLogs].reverse().forEach((log) => {
-      const dur = calcDurationMin(log.start_time, log.end_time);
+    
+    const baseTime = new Date(currentTab.doneLogs[0].start_time).getTime();
+
+    [...currentTab.doneLogs].reverse().forEach((log) => {
+      const sMs = new Date(log.start_time).getTime();
+      const eMs = new Date(log.end_time).getTime();
+      const bMin = Math.max(0, Math.round((sMs - baseTime) / 60000));
+      const eMin = Math.max(bMin, Math.round((eMs - baseTime) / 60000));
+      const dur = eMin - bMin;
       const adamSaat = ((dur * log.worker_count) / 60).toFixed(2);
       
       const row = document.createElement("div");
@@ -433,8 +525,8 @@ function refreshDashboard() {
 
       row.querySelector(".btn-del").onclick = () => {
         if (confirm(`"${log.job_type}" kaydını silmek istediğinize emin misiniz?`)) {
-          appState.activeBatchLogs = appState.activeBatchLogs.filter(l => l.id !== log.id);
-          setStorage(STORE_KEYS.activeBatchLogs + wid, appState.activeBatchLogs);
+          currentTab.doneLogs = currentTab.doneLogs.filter(l => l.id !== log.id);
+          saveTabsToStorage();
           refreshDashboard();
         }
       };
@@ -446,6 +538,7 @@ function refreshDashboard() {
   }
 }
 
+// ---------------- DÜZENLEME MODALI ----------------
 function closeEditModal() {
   appState.editingJobId = null;
   el("editModal").hidden = true;
@@ -455,17 +548,18 @@ el("btnCancelEdit").onclick = closeEditModal;
 
 el("btnSaveEdit").onclick = () => {
   if (!appState.editingJobId) return;
-  const wid = appState.currentWorker.id;
-  const target = appState.activeBatchLogs.find(l => l.id === appState.editingJobId);
+  const currentTab = getActiveTab();
+  const target = currentTab.doneLogs.find(l => l.id === appState.editingJobId);
   if (target) {
     target.worker_count = parseInt(el("editWorkerCountInput").value) || 1;
     target.stop_reason = el("editStopReasonInput").value.trim();
-    setStorage(STORE_KEYS.activeBatchLogs + wid, appState.activeBatchLogs);
+    saveTabsToStorage();
   }
   closeEditModal();
   refreshDashboard();
 };
 
+// ---------------- İŞ BAŞLATMA VE BİTİRME ----------------
 el("btnOpenStartScreen").onclick = () => {
   appState.selJob = null;
   appState.selStation = null;
@@ -535,12 +629,12 @@ el("customWCount").oninput = (e) => {
   }
 };
 
-// YENİ BİR İŞLEM BAŞLAT: Önceki işi silmez, listeye yeni iş olarak ekler!
+// İŞLEMİ BAŞLAT: Sadece o an açık olan sekmeye ekler
 el("btnConfirmStart").onclick = () => {
-  const wid = appState.currentWorker.id;
+  const currentTab = getActiveTab();
   const newJob = {
     id: "job-" + Date.now(),
-    worker_id: wid,
+    tab_id: currentTab.id,
     job_type: appState.selJob,
     activity: appState.selActivity,
     station: appState.selStation,
@@ -548,17 +642,16 @@ el("btnConfirmStart").onclick = () => {
     start_time: new Date().toISOString()
   };
   
-  appState.activeRunningJobs.push(newJob);
-  setStorage(STORE_KEYS.activeRunningList + wid, appState.activeRunningJobs);
-
+  currentTab.activeJobs.push(newJob);
+  saveTabsToStorage();
   showScreen("screenDashboard");
   refreshDashboard();
 };
 
-// SADECE SEÇİLİ OLAN İŞLEMİ BİTİRİR
+// İŞLEMİ BİTİR
 el("btnConfirmEnd").onclick = () => {
   if (!appState.endingJob) return;
-  const wid = appState.currentWorker.id;
+  const currentTab = getActiveTab();
   
   const finished = {
     ...appState.endingJob,
@@ -567,37 +660,32 @@ el("btnConfirmEnd").onclick = () => {
     status: "done"
   };
   
-  // Tamamlananlara ekle
-  appState.activeBatchLogs.push(finished);
-  setStorage(STORE_KEYS.activeBatchLogs + wid, appState.activeBatchLogs);
-
-  // Aktif çalışan işler listesinden yalnızca biteni çıkar
-  appState.activeRunningJobs = appState.activeRunningJobs.filter(j => j.id !== appState.endingJob.id);
-  setStorage(STORE_KEYS.activeRunningList + wid, appState.activeRunningJobs);
+  currentTab.doneLogs.push(finished);
+  currentTab.activeJobs = currentTab.activeJobs.filter(j => j.id !== appState.endingJob.id);
+  saveTabsToStorage();
 
   appState.endingJob = null;
   showScreen("screenDashboard");
   refreshDashboard();
 };
 
-// EXCEL ÇIKTISI
+// ---------------- EXCEL ÇIKTISI (SADECE AÇIK OLAN SEKME) ----------------
 el("btnFinishAndExport").onclick = () => {
-  if (!appState.currentWorker) return;
-  const wid = appState.currentWorker.id;
-  const logsToExport = [...appState.activeBatchLogs];
+  const currentTab = getActiveTab();
+  const logsToExport = [...currentTab.doneLogs];
 
   if (logsToExport.length === 0) {
-    alert("Bu etütte henüz tamamlanmış bir işlem yok.");
+    alert(`"${currentTab.name}" sekmesinde henüz tamamlanmış bir işlem yok.`);
     return;
   }
 
-  // İlk işlemin başlangıcı = 0. dakika
+  // Bu sekmedeki ilk işlemin başlangıç saati = 0. dakika
   const baseTime = new Date(logsToExport[0].start_time).getTime();
 
   const wsData = [
     ["KÖPRÜ KİRİŞİ ETÜDÜ - ZAMAN ETÜDÜ FORMU"],
     ["Tarih:", new Date().toLocaleDateString("tr-TR"), "", "Tesis / Firma:", "KAMBETON A.Ş."],
-    ["Gözlemci:", `${appState.currentWorker.name} (Sicil: ${appState.currentWorker.id})`, "", "Etüt:", `${appState.currentEtudNo}. Etüt`],
+    ["Gözlemci:", `${appState.currentWorker.name} (Sicil: ${appState.currentWorker.id})`, "", "Etüt:", currentTab.name],
     [],
     ["İŞLEM NO", "İŞLEM ADI", "FAALİYET", "BAŞLANGIÇ SAATİ", "BAŞLAMA", "BİTİŞ SAATİ", "BİTİŞ", "SÜRE (dk)", "KİŞİ", "ADAM SAAT", "DURUŞ / GECİKME NEDENİ"]
   ];
@@ -607,9 +695,13 @@ el("btnFinishAndExport").onclick = () => {
   logsToExport.forEach((l, idx) => {
     const sMs = new Date(l.start_time).getTime();
     const eMs = new Date(l.end_time).getTime();
+    
+    // Dakikalar 0 referansına göre
     const baslama = Math.max(0, Math.round((sMs - baseTime) / 60000));
-    const sure = calcDurationMin(l.start_time, l.end_time);
-    const bitis = baslama + sure;
+    const bitis = Math.max(baslama, Math.round((eMs - baseTime) / 60000));
+    
+    // SÜRE = BİTİŞ - BAŞLAMA
+    const sure = bitis - baslama;
     const adamSaat = Number(((sure * l.worker_count) / 60).toFixed(2));
 
     if (l.activity === "İŞLEM") sumIslem += sure;
@@ -644,51 +736,37 @@ el("btnFinishAndExport").onclick = () => {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Zaman_Etudu");
 
-  const cleanName = appState.currentWorker.name.replace(/\s+/g, "_");
+  const cleanWorker = appState.currentWorker.name.replace(/\s+/g, "_");
+  const cleanTab = currentTab.name.replace(/\s+/g, "_");
   const dateStr = new Date().toISOString().slice(0, 10);
-  const fileName = `etut_${cleanName}_${appState.currentEtudNo}_Etut_${dateStr}.xlsx`;
+  const fileName = `etut_${cleanWorker}_${cleanTab}_${dateStr}.xlsx`;
   XLSX.writeFile(wb, fileName);
 
-  // İndirildikten sonra listeyi sıfırla ve yeni etüde geç
-  appState.activeBatchLogs = [];
-  setStorage(STORE_KEYS.activeBatchLogs + wid, []);
-
-  appState.currentEtudNo += 1;
-  setStorage(STORE_KEYS.etudCounter + wid, appState.currentEtudNo);
-
-  el("etudBatchBadge").textContent = `${appState.currentEtudNo}. Etüt (${appState.currentWorker.name})`;
+  // İndirilen sekmenin kayıtlarını sıfırla
+  currentTab.doneLogs = [];
+  saveTabsToStorage();
   refreshDashboard();
-  alert(`${fileName} başarıyla indirildi!\n\n${appState.currentEtudNo}. Etüt başladı.`);
+  alert(`${fileName} başarıyla indirildi!\n\n"${currentTab.name}" sekmesi sıfırlandı, yeni kayıtlar için hazır.`);
 };
 
-el("btnManualNewEtud").onclick = () => {
-  if (appState.activeBatchLogs.length > 0) {
-    if (!confirm("Mevcut etütte kayıtlı işlemler var. Yeni etüde geçerseniz liste sıfırlanır. Devam edilsin mi?")) return;
-  }
-  const wid = appState.currentWorker.id;
-  appState.activeBatchLogs = [];
-  setStorage(STORE_KEYS.activeBatchLogs + wid, []);
-  appState.currentEtudNo += 1;
-  setStorage(STORE_KEYS.etudCounter + wid, appState.currentEtudNo);
-  el("etudBatchBadge").textContent = `${appState.currentEtudNo}. Etüt (${appState.currentWorker.name})`;
-  refreshDashboard();
-};
-
+// Sekmeyi Sıfırlama
 el("btnResetActiveEtud").onclick = () => {
-  if (confirm(`Bu etüde ait (${appState.activeBatchLogs.length}) işlem silinecek. Emin misiniz?`)) {
-    const wid = appState.currentWorker.id;
-    appState.activeBatchLogs = [];
-    setStorage(STORE_KEYS.activeBatchLogs + wid, []);
+  const currentTab = getActiveTab();
+  if (confirm(`"${currentTab.name}" sekmesindeki ${currentTab.doneLogs.length} tamamlanmış işlem silinecek. Emin misiniz?`)) {
+    currentTab.doneLogs = [];
+    saveTabsToStorage();
     refreshDashboard();
   }
 };
 
-// TÜM PARALEL İŞLERİN CANLI SAYAÇLARI
+// CANLI SAYAÇLAR: TÜM SEKMELERDEKİ İŞLERİ ARKA PLANDA KESİNTİSİZ ÇALIŞTIRIR
 setInterval(() => {
   const now = new Date();
   el("clock").textContent = now.toLocaleTimeString("tr-TR");
-  if (appState.activeRunningJobs && appState.activeRunningJobs.length > 0) {
-    appState.activeRunningJobs.forEach(job => {
+  
+  const currentTab = getActiveTab();
+  if (currentTab && currentTab.activeJobs) {
+    currentTab.activeJobs.forEach(job => {
       const td = document.getElementById("timer-" + job.id);
       if (td) td.textContent = fmtDuration(now - new Date(job.start_time));
     });
